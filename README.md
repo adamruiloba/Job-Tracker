@@ -5,7 +5,9 @@ One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your
 ## How it works day to day
 **One address = one job, and you're paid per job.** Everything for that address lives in one place.
 1. **Clock In**: one tap. It finds the street address from your location. At a brand-new place it shows the address so you can fix it before saving. If the address (or a spot within ~300 m) already belongs to a job, you're clocked into that same job.
-2. **Clock Out**: one tap. Add a quick note for the day if you want.
+2. **Clock Out**: one tap. You stay on the Clock tab, so the next job is one tap away. Adding a note for the day is optional ("Add notes").
+   - **Two jobs in one day?** While clocked in, tap **Switch to another job**. It clocks you out and into the next job (by location, a recent job, or an address). Each job keeps its own hours, and the ledger shows both under one day total.
+   - If two entries overlap in time, the app warns you when you save.
 3. **Jobs tab**: one card per address, showing how long it took, what was done, and whether it's paid. Search by address or notes, or pick a date.
 4. **Job page** (the heart of the app):
    - **How long it took**: days, total hours and the date range.

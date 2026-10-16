@@ -207,7 +207,7 @@ function findOrMakeJob(address, lat = "", lng = "") {
 function getPosition() {
   return new Promise((res, rej) => {
     if (!navigator.geolocation) return rej(new Error("no geolocation"));
-    navigator.geolocation.getCurrentPosition(p => res(p.coords), e => rej(e), { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+    navigator.geolocation.getCurrentPosition(p => res(p.coords), e => rej(e), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   });
 }
 function meters(a, b) {
@@ -224,7 +224,7 @@ async function reverseGeocode(lat, lng) {
 }
 
 /* ---------- clock in / out ---------- */
-let busy = false, pending = null;
+let busy = false, pending = null, lastOut = null;
 async function clockIn() {
   if (busy || activeEntry()) return;
   busy = true; render();
@@ -249,7 +249,7 @@ function startEntry(job) {
 function clockOut() {
   const v = activeEntry(); if (!v) return;
   v.end = nowLocal(); touch(v); save(); toast(`Clocked out — ${fmtHrs(hoursOf(v))}`);
-  tab = "jobs"; openJob = v.siteId; openEntry = v.id; render();
+  lastOut = v.id; tab = "clock"; openJob = null; openEntry = null; render();
 }
 
 /* ---------- navigation ---------- */
@@ -279,32 +279,48 @@ function viewClock(app, sub) {
         <div class="muted" style="text-align:center">Started ${fmtTime(a.start)}</div>
       </div>
       <button class="clock out" id="out">Clock Out</button>
-      <div class="actions"><button class="small" id="open">Open this job</button><button class="small" id="chg">Wrong job? Change</button></div>
+      <div class="actions"><button class="small primary" id="switch">⇄ Switch to another job</button><button class="small" id="open">Open this job</button><button class="small" id="chg">Wrong job? Change</button></div>
       <div id="choose"></div>`;
     const tick = () => { const s = Math.max(0, Math.floor((Date.now() - new Date(a.start)) / 1000)); const t = $("#timer"); if (t) t.textContent = `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
     tick(); timerHandle = setInterval(tick, 1000);
     $("#out").onclick = clockOut;
     $("#open").onclick = () => goJob(a.siteId);
+    $("#switch").onclick = () => switchPanel($("#choose"), a);
     $("#chg").onclick = () => chooseJobUI($("#choose"), job => { a.siteId = job.id; touch(a); save(); render(); });
     return;
   }
   const today = entries().filter(v => dayOf(v.start) === todayStr()).sort((x, y) => y.start.localeCompare(x.start));
   const todayHrs = today.reduce((t, v) => t + hoursOf(v), 0);
-  const recent = recentJobs();
+  const recent = recentJobs(), lo = lastOut && state.visits.find(x => x.id === lastOut && live(x) && x.end);
+  const todayJobs = new Set(today.map(v => v.siteId)).size;
   app.innerHTML = `
+    ${lo ? `<div class="card"><div>✓ Clocked out of <strong>${esc(addrOf(lo))}</strong></div><div class="muted">${fmtTime(lo.start)} – ${fmtTime(lo.end)} · ${fmtHrs(hoursOf(lo))}</div><div class="actions"><button class="small" id="lo-notes">Add notes</button><button class="small" id="lo-x">Dismiss</button></div></div>` : ""}
     <button class="clock" id="in" ${busy ? "disabled" : ""}>${busy ? "Finding your location…" : "Clock In"}</button>
     <p class="muted" style="text-align:center">Uses your location to find the job. Each address is one job.</p>
     <div id="choose"></div>
     ${recent.length ? `<h2>Back to a job</h2>${recent.map(s => { const st = stats(s); return `<button style="width:100%;text-align:left;margin-bottom:8px" data-job="${s.id}">▶ Clock in at <strong>${esc(s.address)}</strong><div class="muted">${st.days} day${st.days === 1 ? "" : "s"} · ${fmtHrs(st.hours)} so far</div></button>`; }).join("")}` : ""}
     <div class="actions" style="justify-content:center"><button class="small" id="manual">Choose a job or type an address</button></div>
-    <h2>Today ${today.length ? `<span class="muted">· ${fmtHrs(todayHrs)}</span>` : ""}</h2>
+    <h2>Today ${today.length ? `<span class="muted">· ${fmtHrs(todayHrs)} · ${todayJobs} job${todayJobs === 1 ? "" : "s"}</span>` : ""}</h2>
     ${today.length ? today.map(v => `<div class="card tap" data-job-open="${v.siteId}"><div class="row"><strong>${esc(addrOf(v))}</strong><span class="muted">${fmtTime(v.start)} – ${fmtTime(v.end)}</span></div><div class="muted">${fmtHrs(hoursOf(v))}${v.notes ? " · " + esc(v.notes.slice(0, 60)) : ""}</div></div>`).join("") : `<div class="muted">No time logged yet today.</div>`}`;
   $("#in").onclick = clockIn;
+  if (lo) { $("#lo-notes").onclick = () => { tab = "jobs"; openJob = lo.siteId; openEntry = lo.id; render(); }; $("#lo-x").onclick = () => { lastOut = null; render(); }; }
   $("#manual").onclick = () => chooseJobUI($("#choose"), startEntry);
   app.querySelectorAll("[data-job]").forEach(b => b.onclick = () => startEntry(jobById(b.dataset.job)));
   app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = () => goJob(c.dataset.jobOpen));
   if (pending) confirmNewJob($("#choose"));
   else if (sub === "choose") chooseJobUI($("#choose"), startEntry);
+}
+function switchPanel(box, a) {
+  const others = recentJobs().filter(s => s.id !== a.siteId);
+  box.innerHTML = `<div class="card"><strong>Switch to another job</strong><div class="muted">Clocks you out of ${esc(addrOf(a))} and straight into the next job.</div>
+    <div class="actions"><button class="primary small" id="sw-gps">📍 Use my location</button></div>
+    ${others.map(s => `<button style="width:100%;text-align:left;margin-top:8px" data-sw="${s.id}">▶ <strong>${esc(s.address)}</strong></button>`).join("")}
+    <div class="actions"><button class="small" id="sw-pick">Choose or type an address…</button><button class="small" id="sw-x">Cancel</button></div><div id="sw-choose"></div></div>`;
+  const out = () => { a.end = nowLocal(); touch(a); save(); lastOut = a.id; };
+  $("#sw-gps").onclick = () => { out(); render(); clockIn(); };
+  box.querySelectorAll("[data-sw]").forEach(b => b.onclick = () => { out(); startEntry(jobById(b.dataset.sw)); });
+  $("#sw-pick").onclick = () => chooseJobUI($("#sw-choose"), job => { out(); startEntry(job); });
+  $("#sw-x").onclick = () => { box.innerHTML = ""; };
 }
 function recentJobs() {
   const last = {}; entries().forEach(v => { if (!last[v.siteId] || v.start > last[v.siteId]) last[v.siteId] = v.start; });
@@ -471,7 +487,11 @@ function viewEntry(app) {
     </div>`;
   const back = () => { openEntry = null; render(); };
   $("#back").onclick = back;
-  $("#v-save").onclick = () => { v.start = $("#v-start").value || v.start; v.end = $("#v-end").value; v.notes = $("#v-notes").value; touch(v); save(); toast("Saved"); back(); };
+  $("#v-save").onclick = () => {
+    v.start = $("#v-start").value || v.start; v.end = $("#v-end").value; v.notes = $("#v-notes").value; touch(v); save();
+    const clash = v.end && entries().find(o => o.id !== v.id && o.end && o.start < v.end && o.end > v.start);
+    toast(clash ? `Saved. Heads up: this overlaps ${addrOf(clash)} (${fmtTime(clash.start)}–${fmtTime(clash.end)})` : "Saved", clash ? 5000 : 2600); back();
+  };
   $("#v-del").onclick = () => { if (!confirm("Delete this time entry?")) return; touch(Object.assign(v, { deleted: true })); save(); back(); };
 }
 

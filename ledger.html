@@ -150,7 +150,7 @@ function viewJob(js) {
   const T = js.reduce((t, a) => ({ d: t.d + a.days.size, h: t.h + a.hours, p: t.p + num(a.s.pay), g: t.g + num(a.s.paidAmount) }), { d: 0, h: 0, p: 0, g: 0 });
   if (rows.length) rows.push(`<tr class="total"><td class="first">Total · ${js.length} job${js.length === 1 ? "" : "s"}</td><td class="n hm">${T.d}</td><td class="n">${h2(T.h)}</td><td class="n">${m2(T.p)}</td><td class="n">${m2(T.g)}</td><td class="n">${m2(T.p - T.g)}</td><td class="hm"></td></tr>`);
   return table([["Job"], ["Days", "n hm"], ["Hrs", "n"], ["Pay", "n"], ["Paid", "n"], ["Due", "n"], ["$/hr", "n hm"]], rows,
-    { note: "A job is listed in the period of its last day worked. Days = days worked on that job. Totals use whole-job figures. Pay = job pay, Paid = received, Due = still owed." });
+    { note: "A job is listed in the period of its last day worked. Days = days worked on that job, so a day with two jobs counts once for each. Totals use whole-job figures. Pay = job pay, Paid = received, Due = still owed." });
 }
 
 /* BY DAY */
