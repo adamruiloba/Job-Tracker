@@ -4,9 +4,9 @@ One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your
 
 ## How it works day to day
 **One address = one job, and you're paid per job.** Everything for that address lives in one place.
-1. **Clock In**: one tap. It finds the street address from your location. At a brand-new place it shows the address so you can fix it before saving. If the address (or a spot within ~300 m) already belongs to a job, you're clocked into that same job.
+1. **Clock In**: type the job's address (or pick one you've already saved) and tap **Clock In**. The same address is always the same job, even if you type it a little differently. Jobs you've worked recently show up as one-tap buttons. There's no GPS: nothing about your location is used or sent anywhere.
 2. **Clock Out**: one tap. You stay on the Clock tab, so the next job is one tap away. Adding a note for the day is optional ("Add notes").
-   - **Two jobs in one day?** While clocked in, tap **Switch to another job**. It clocks you out and into the next job (by location, a recent job, or an address). Each job keeps its own hours, and the ledger shows both under one day total.
+   - **Two jobs in one day?** While clocked in, tap **Switch to another job**. It clocks you out and into the next job (a recent job, or type an address). Each job keeps its own hours, and the ledger shows both under one day total.
    - If two entries overlap in time, the app warns you when you save.
 3. **Jobs tab**: one card per address, showing how long it took, what was done, and whether it's paid. Search by address or notes, or pick a date.
 4. **Job page** (the heart of the app):
@@ -46,5 +46,4 @@ The app only has the `drive.file` permission, so it can only see files it create
 ## Good to know
 - It works offline and saves on the phone first. Tap **Sync** (top right) when you have signal. It also syncs by itself a few seconds after changes while you're signed in.
 - The Google Sheet is readable by you. Open it any time, or share it with someone.
-- Location needs permission the first time. If it can't find you, pick or type the address instead.
-- Address lookup uses OpenStreetMap's free service, so addresses are usually right but you can edit them on the job page.
+- Tap **🧭 Directions** on a job (on the Jobs list, the job page, or the Clock tab) to open Google Maps directions to the address.
