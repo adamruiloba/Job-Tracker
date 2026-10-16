@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Job Ledger</title>
+<style>
+  :root { --paper:#fff; --ink:#16181c; --muted:#5f6670; --rule:#cfd4da; --soft:#f3f5f7; --head:#e9edf1; --neg:#a40e26; --accent:#1f4f8f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#14171b; --ink:#e8eaed; --muted:#98a0aa; --rule:#323941; --soft:#1b1f25; --head:#222831; --neg:#ff8a9b; --accent:#8db8f5; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:14px 16px 60px; }
+  .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  a { color:var(--accent); text-decoration:none; }
+  h1 { font:700 20px/1.2 Georgia,"Times New Roman",serif; margin:6px 0 2px; letter-spacing:.2px; }
+  .sub { color:var(--muted); font-size:12.5px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; padding:10px; background:var(--soft); border:1px solid var(--rule); border-radius:6px; }
+  .controls label { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:5px; }
+  input[type=date], input[type=month] { font:inherit; color:var(--ink); background:var(--paper); border:1px solid var(--rule); border-radius:4px; padding:4px 6px; }
+  button { font:inherit; font-size:13px; color:var(--ink); background:var(--paper); border:1px solid var(--rule); border-radius:4px; padding:5px 10px; cursor:pointer; }
+  button.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .tabs { display:flex; gap:0; margin:10px 0 0; border-bottom:2px solid var(--ink); }
+  .tabs button { border:0; border-radius:4px 4px 0 0; padding:8px 14px; font-weight:600; background:none; color:var(--muted); }
+  .tabs button.on { background:var(--ink); color:var(--paper); }
+  .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(105px,1fr)); border:1px solid var(--rule); border-radius:6px; margin:12px 0; }
+  .summary div { padding:8px 10px; border-right:1px solid var(--rule); border-bottom:1px solid var(--rule); }
+  .summary div:last-child { border-right:0; }
+  .summary small { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+  .summary b { font-size:15px; font-variant-numeric:tabular-nums; }
+  .scroll { overflow-x:auto; border:1px solid var(--rule); border-radius:6px; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; font-size:13px; }
+  th { background:var(--head); text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); padding:7px 6px; border-bottom:1px solid var(--ink); white-space:nowrap; letter-spacing:.2px; }
+  td { padding:7px 6px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th.n, td.n { text-align:right; white-space:nowrap; }
+  tr.month td { background:var(--head); font-weight:700; border-top:1px solid var(--ink); }
+  tr.sub td { background:var(--soft); font-weight:600; }
+  tr.total td { font-weight:700; border-top:2px double var(--ink); border-bottom:0; background:var(--soft); }
+  td.job { min-width:105px; }
+  td.first { padding-right:6px; }
+  td.first, th.first { position:sticky; left:0; background:var(--paper); z-index:1; }
+  th.first { background:var(--head); }
+  tr.total td.first, tr.sub td.first { background:var(--soft); }
+  @media (max-width:560px) { .hm { display:none; } }
+  .neg { color:var(--neg); }
+  .muted { color:var(--muted); }
+  .note { color:var(--muted); font-size:12px; margin:8px 2px; }
+  .empty { padding:30px; text-align:center; color:var(--muted); }
+  .g td, .g th { padding:6px 8px; text-align:right; } .g td:first-child, .g th:first-child { text-align:left; }
+  .g td.z { color:var(--rule); }
+  @media print {
+    .controls, .tabs, .noprint { display:none !important; }
+    body { font-size:11px; } .wrap { max-width:none; padding:0; }
+    .scroll { overflow:visible; border:0; } th { background:#eee !important; color:#000; } td.first, th.first { position:static; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="noprint" href="./">← Job Tracker</a><span class="sub" id="stamp"></span></div>
+  <h1>Job Ledger</h1>
+  <div class="sub">Time and pay by job and by day. Pay is per job.</div>
+
+  <div class="controls noprint">
+    <label>From <input type="date" id="from"></label>
+    <label>To <input type="date" id="to"></label>
+    <button data-p="all">All time</button><button data-p="month">This month</button><button data-p="last">Last month</button><button data-p="year">This year</button>
+    <span style="flex:1"></span>
+    <button id="csv">⬇ CSV</button><button id="print">🖨 Print</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="tabs"><button data-v="job">By job</button><button data-v="day">By day</button><button data-v="grid">Day × job grid</button></div>
+  <div id="view"></div>
+</div>
+
+<script>
+"use strict";
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let state = { sites: [], visits: [] };
+try { const s = JSON.parse(localStorage.getItem("painterJobs.v2")); if (s) state = s; } catch {}
+const live = o => !o.deleted;
+const jobs = (state.sites || []).filter(live);
+const jobById = Object.fromEntries(jobs.map(s => [s.id, s]));
+const dayOf = s => (s || "").slice(0, 10);
+const hrs = v => Math.max(0, (new Date(v.end) - new Date(v.start)) / 36e5);
+const entries = (state.visits || []).filter(v => live(v) && v.end && jobById[v.siteId]).sort((a, b) => a.start.localeCompare(b.start));
+const num = x => Number(x) || 0;
+const m2 = n => { const v = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return n < 0 ? `<span class="neg">(${v})</span>` : v; };
+const h2 = n => n.toFixed(2);
+const fmtD = s => s ? new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+const fmtShort = s => s ? new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+const fmtDW = s => new Date(s + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+const fmtT = s => new Date(s).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const monthName = m => new Date(m + "-15T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+/* per-job totals (whole job) */
+const agg = {};
+for (const s of jobs) agg[s.id] = { s, es: [], hours: 0, days: new Set(), first: "", last: "" };
+for (const v of entries) { const a = agg[v.siteId]; a.es.push(v); a.hours += hrs(v); a.days.add(dayOf(v.start)); a.first ||= dayOf(v.start); a.last = dayOf(v.start); }
+
+/* period */
+let from = "", to = "", view = "job", gridMonth = "", lastCsv = null;
+const inRange = d => (!from || d >= from) && (!to || d <= to);
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function preset(p) {
+  const n = new Date();
+  if (p === "all") { from = to = ""; }
+  if (p === "month") { from = ymd(new Date(n.getFullYear(), n.getMonth(), 1)); to = ymd(new Date(n.getFullYear(), n.getMonth() + 1, 0)); }
+  if (p === "last") { from = ymd(new Date(n.getFullYear(), n.getMonth() - 1, 1)); to = ymd(new Date(n.getFullYear(), n.getMonth(), 0)); }
+  if (p === "year") { from = `${n.getFullYear()}-01-01`; to = `${n.getFullYear()}-12-31`; }
+  $("#from").value = from; $("#to").value = to; draw();
+}
+
+function jobRows() {
+  return Object.values(agg).filter(a => a.es.length ? inRange(a.last) : !from && !to).sort((a, b) => b.last.localeCompare(a.last)); // a job falls in the period of its last day worked
+}
+function draw() {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
+  const js = jobRows(), dayEs = entries.filter(v => inRange(dayOf(v.start)));
+  const pay = js.reduce((t, a) => t + num(a.s.pay), 0), got = js.reduce((t, a) => t + num(a.s.paidAmount), 0);
+  const jh = js.filter(a => num(a.s.pay) > 0).reduce((t, a) => t + a.hours, 0);
+  $("#summary").innerHTML = [
+    ["Jobs", js.length], ["Days worked", new Set(dayEs.map(v => dayOf(v.start))).size], ["Hours", h2(dayEs.reduce((t, v) => t + hrs(v), 0))],
+    ["Job pay", m2(pay)], ["Received", m2(got)], ["Balance due", m2(pay - got)], ["Pay per hour", jh ? m2(js.filter(a => num(a.s.pay) > 0).reduce((t, a) => t + num(a.s.pay), 0) / jh) : "—"],
+  ].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
+  $("#view").innerHTML = ""; $("#view").append(view === "job" ? viewJob(js) : view === "day" ? viewDay(dayEs) : viewGrid());
+}
+
+function table(head, rows, opts = {}) {
+  const w = document.createElement("div");
+  if (!rows.length) { w.innerHTML = `<div class="empty">${entries.length || jobs.length ? "Nothing in this period." : "No data yet. Clock in at a job in the Job Tracker first, on this same phone."}</div>`; return w; }
+  w.innerHTML = `<div class="scroll"><table class="${opts.cls || ""}"><thead><tr>${head.map((h, i) => `<th class="${h[1] || ""}${i === 0 ? " first" : ""}">${h[0]}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>${opts.note ? `<div class="note">${opts.note}</div>` : ""}`;
+  return w;
+}
+
+/* BY JOB */
+function viewJob(js) {
+  const rows = js.map(a => {
+    const s = a.s, p = num(s.pay), g = num(s.paidAmount), bal = p - g;
+    lastCsvRows.push([s.address, s.done ? "Finished" : "Open", a.first, a.last, a.days.size, h2(a.hours), p || "", g || "", p ? bal : "", p && a.hours ? (p / a.hours).toFixed(2) : ""]);
+    const when = a.es.length ? `${fmtShort(a.first)}${a.first !== a.last ? "–" + fmtShort(a.last) : ""} · ` : "";
+    return `<tr><td class="job first">${esc(s.address)}<div class="muted" style="font-size:12px">${a.es.length ? a.days.size + (a.days.size === 1 ? " day · " : " days · ") : ""}${when}${s.done ? "Finished" : "Open"}</div>${s.work || s.paint ? `<div class="muted hm" style="font-size:12px">${esc((s.work || "").slice(0, 80))}${s.paint ? " · Paint: " + esc(s.paint.slice(0, 60)) : ""}</div>` : ""}</td>
+      <td class="n hm">${a.days.size}</td><td class="n">${h2(a.hours)}</td><td class="n">${p ? m2(p) : "—"}</td><td class="n">${g ? m2(g) : "—"}</td><td class="n">${p ? m2(bal) : "—"}</td><td class="n hm">${p && a.hours ? m2(p / a.hours) : "—"}</td></tr>`;
+  });
+  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, h: t.h + a.hours, p: t.p + num(a.s.pay), g: t.g + num(a.s.paidAmount) }), { d: 0, h: 0, p: 0, g: 0 });
+  if (rows.length) rows.push(`<tr class="total"><td class="first">Total · ${js.length} job${js.length === 1 ? "" : "s"}</td><td class="n hm">${T.d}</td><td class="n">${h2(T.h)}</td><td class="n">${m2(T.p)}</td><td class="n">${m2(T.g)}</td><td class="n">${m2(T.p - T.g)}</td><td class="hm"></td></tr>`);
+  return table([["Job"], ["Days", "n hm"], ["Hrs", "n"], ["Pay", "n"], ["Paid", "n"], ["Due", "n"], ["$/hr", "n hm"]], rows,
+    { note: "A job is listed in the period of its last day worked. Days = days worked on that job. Totals use whole-job figures. Pay = job pay, Paid = received, Due = still owed." });
+}
+
+/* BY DAY */
+function viewDay(es) {
+  const byDay = {}; es.forEach(v => (byDay[dayOf(v.start)] ||= []).push(v));
+  const days = Object.keys(byDay).sort(), rows = []; let curM = "", mH = 0, mP = 0, mark = -1;
+  const flush = () => { if (mark >= 0) rows[mark] = rows[mark].replace("@H", h2(mH)).replace("@P", m2(mP)); };
+  let totH = 0, totP = 0;
+  for (const d of days) {
+    if (d.slice(0, 7) !== curM) { flush(); curM = d.slice(0, 7); mH = 0; mP = 0; mark = rows.length; rows.push(`<tr class="month"><td class="first" colspan="2">${monthName(curM)}</td><td class="n">@H</td><td class="n">@P</td></tr>`); }
+    const list = byDay[d]; let dh = 0, dp = 0;
+    list.forEach((v, i) => {
+      const a = agg[v.siteId], h = hrs(v), p = num(a.s.pay) && a.hours ? num(a.s.pay) * h / a.hours : 0; dh += h; dp += p;
+      lastCsvRows.push([d, a.s.address, fmtT(v.start), fmtT(v.end), h2(h), p ? p.toFixed(2) : "", (v.notes || "").replace(/\s+/g, " ")]);
+      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)}${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div></td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
+    });
+    if (list.length > 1) rows.push(`<tr class="sub"><td class="first">Day total</td><td>${list.length} jobs</td><td class="n">${h2(dh)}</td><td class="n">${dp ? m2(dp) : "—"}</td></tr>`);
+    mH += dh; mP += dp; totH += dh; totP += dp;
+  }
+  flush();
+  if (days.length) rows.push(`<tr class="total"><td class="first">Total · ${days.length} day${days.length === 1 ? "" : "s"}</td><td></td><td class="n">${h2(totH)}</td><td class="n">${m2(totP)}</td></tr>`);
+  return table([["Date"], ["Job"], ["Hrs", "n"], ["Share", "n"]], rows,
+    { note: "You're paid per job, so \"Share\" splits each job's pay across its days by hours worked. It's for reference only; the real figures are on the By job tab." });
+}
+
+/* DAY × JOB GRID */
+function viewGrid() {
+  const months = [...new Set(entries.map(v => dayOf(v.start).slice(0, 7)))].sort();
+  if (!gridMonth || (!months.includes(gridMonth) && months.length)) gridMonth = (to && months.includes(to.slice(0, 7)) ? to.slice(0, 7) : months[months.length - 1]) || "";
+  const w = document.createElement("div");
+  w.innerHTML = `<div class="controls noprint" style="margin-top:0"><label>Month <input type="month" id="gm" value="${gridMonth}"></label></div>`;
+  const es = entries.filter(v => dayOf(v.start).slice(0, 7) === gridMonth);
+  if (!gridMonth || !es.length) { w.insertAdjacentHTML("beforeend", `<div class="empty">${months.length ? "No work logged in this month." : "No data yet."}</div>`); setTimeout(wireGrid); return w; }
+  const [Y, M] = gridMonth.split("-").map(Number), nd = new Date(Y, M, 0).getDate();
+  const grid = {}; es.forEach(v => { const r = grid[v.siteId] ||= Array(nd + 1).fill(0); r[+dayOf(v.start).slice(8, 10)] += hrs(v); });
+  const ids = Object.keys(grid).sort((a, b) => agg[a].s.address.localeCompare(agg[b].s.address)), col = Array(nd + 1).fill(0);
+  let rows = ids.map(id => { const r = grid[id], tot = r.reduce((t, x) => t + x, 0); r.forEach((x, d) => col[d] += x);
+    lastCsvRows.push([agg[id].s.address, ...r.slice(1).map(x => x ? h2(x) : ""), h2(tot)]);
+    return `<tr><td class="first job">${esc(agg[id].s.address)}</td>${r.slice(1).map(x => x ? `<td>${h2(x)}</td>` : `<td class="z">·</td>`).join("")}<td><b>${h2(tot)}</b></td></tr>`; });
+  rows.push(`<tr class="total"><td class="first">Total hours</td>${col.slice(1).map(x => `<td>${x ? h2(x) : ""}</td>`).join("")}<td>${h2(col.reduce((t, x) => t + x, 0))}</td></tr>`);
+  lastCsvHead = ["Job", ...Array.from({ length: nd }, (_, i) => i + 1), "Total"];
+  const t = table([["Job"], ...Array.from({ length: nd }, (_, i) => [String(i + 1)]), ["Total"]], rows, { cls: "g", note: `Hours worked on each job, by day of ${monthName(gridMonth)}.` });
+  w.append(t); setTimeout(wireGrid); return w;
+}
+function wireGrid() { const g = $("#gm"); if (g) g.onchange = e => { gridMonth = e.target.value; draw(); }; }
+
+/* CSV / events */
+let lastCsvRows = [], lastCsvHead = null;
+const HEADS = { job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Pay share", "Notes"] };
+const _draw = draw; draw = function () { lastCsvRows = []; lastCsvHead = null; _draw(); };
+function setView(v) { view = v; draw(); }
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setView(b.dataset.v));
+document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => preset(b.dataset.p));
+$("#from").onchange = e => { from = e.target.value; draw(); };
+$("#to").onchange = e => { to = e.target.value; draw(); };
+$("#print").onclick = () => window.print();
+$("#csv").onclick = () => {
+  const q = x => `"${String(x ?? "").replace(/"/g, '""')}"`, head = lastCsvHead || HEADS[view];
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([[head.map(q).join(",")].concat(lastCsvRows.map(r => r.map(q).join(","))).join("\n")], { type: "text/csv" }));
+  a.download = `ledger-${view}.csv`; document.body.append(a); a.click(); a.remove();
+};
+$("#stamp").textContent = "Prepared " + new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+draw();
+</script>
+</body>
+</html>

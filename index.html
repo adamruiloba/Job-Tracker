@@ -93,7 +93,7 @@ function toast(msg, ms=2600) { const t = document.createElement("div"); t.classN
 function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 
 /* ---------- data model ----------
-   sites  = JOBS. One address = one job:  {id,name,address,lat,lng,pay,paidAmount,paidDate,updated,deleted}
+   sites  = JOBS. One address = one job:  {id,name,address,lat,lng,pay,paidAmount,paidDate,paint,work,done,updated,deleted}
    visits = TIME ENTRIES (one clock-in/out) inside a job: {id,siteId,start,end,notes,updated,deleted}
    photos = photos of a job: {id,siteId,taken,driveId,updated,deleted}  (image bytes live in IndexedDB + Drive)
    Older versions kept pay on each entry and allowed duplicate addresses; cleanup() migrates and merges those. */
@@ -150,6 +150,7 @@ function cleanup() {
   for (const s of state.sites) {
     if (s.pay === undefined || s.pay === "") s.pay = (s.lastPay !== "" && s.lastPay != null && Number(s.lastPay) > 0) ? Number(s.lastPay) : "";
     if (s.paidAmount === undefined) s.paidAmount = ""; if (s.paidDate === undefined) s.paidDate = "";
+    for (const f of ["paint", "work", "done"]) if (s[f] === undefined) s[f] = "";
     if (s.lastPay !== "" && s.lastPay != null) { s.lastPay = ""; touch(s); changed = true; }
   }
   // 2. merge jobs that share an address (oldest id wins, so every phone picks the same one)
@@ -164,6 +165,8 @@ function cleanup() {
       if (!(Number(keep.pay) > 0) && Number(dup.pay) > 0) keep.pay = dup.pay;
       keep.paidAmount = (Number(keep.paidAmount) || 0) + (Number(dup.paidAmount) || 0) || "";
       if (dup.paidDate && (!keep.paidDate || dup.paidDate > keep.paidDate)) keep.paidDate = dup.paidDate;
+      for (const f of ["paint", "work"]) if (dup[f] && dup[f] !== keep[f]) keep[f] = keep[f] ? keep[f] + "\n" + dup[f] : dup[f];
+      if (dup.done && !keep.done) keep.done = dup.done;
       if ((keep.lat === "" || keep.lat == null) && dup.lat !== "" && dup.lat != null) { keep.lat = dup.lat; keep.lng = dup.lng; }
       redirects[dup.id] = keep.id; touch(keep); dup.deleted = true; touch(dup); changed = true;
     }
@@ -196,7 +199,7 @@ function stats(s) {
 function findOrMakeJob(address, lat = "", lng = "") {
   const k = normAddr(address); let s = jobs().find(x => normAddr(x.address) === k);
   if (s) { if ((s.lat === "" || s.lat == null) && lat !== "") { s.lat = lat; s.lng = lng; touch(s); } return s; }
-  s = touch({ id: uid(), name: "", address: address.trim(), lat, lng, pay: "", paidAmount: "", paidDate: "", deleted: false });
+  s = touch({ id: uid(), name: "", address: address.trim(), lat, lng, pay: "", paidAmount: "", paidDate: "", paint: "", work: "", done: "", deleted: false });
   state.sites.push(s); return s;
 }
 
@@ -336,7 +339,8 @@ function jobCard(s) {
   const st = stats(s), ps = payStatus(s);
   return `<div class="card tap" data-job-open="${s.id}">
     <div class="row"><span class="addr" style="font-size:17px">${esc(s.address)}</span>${st.active ? `<span class="pill live">In progress</span>` : `<span class="pill ${ps}">${statusLabel[ps]}</span>`}</div>
-    <div class="muted">${st.days ? `${st.days} day${st.days === 1 ? "" : "s"} · ${fmtHrs(st.hours)} · ${fmtShort(st.first)}${dayOf(st.first) !== dayOf(st.last) ? " – " + fmtShort(st.last) : ""}` : "No time logged yet"}</div>
+    <div class="muted">${st.days ? `Took ${st.days} day${st.days === 1 ? "" : "s"} · ${fmtHrs(st.hours)} · ${fmtShort(st.first)}${dayOf(st.first) !== dayOf(st.last) ? " – " + fmtShort(st.last) : ""}` : "No time logged yet"}${s.done ? " · ✓ Finished" : ""}</div>
+    ${s.work ? `<div class="muted" style="margin-top:2px">${esc(s.work.slice(0, 80))}${s.work.length > 80 ? "…" : ""}</div>` : ""}
     <div class="row" style="margin-top:4px"><span>${Number(s.pay) ? money(s.pay) : ""}${owedOf(s) > 0 && paidOf(s) > 0 ? ` <span class="muted">· owed ${money(owedOf(s))}</span>` : ""}</span><span class="muted">${photosOf(s).length} 📷</span></div>
   </div>`;
 }
@@ -365,17 +369,30 @@ function viewJob(app) {
   if (!s) { openJob = null; return render(); }
   const st = stats(s), ps = payStatus(s), act = activeEntry();
   const maps = s.lat !== "" && s.lat != null ? `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`;
+  const span = st.days ? `${fmtShort(st.first)}${dayOf(st.first) !== dayOf(st.last) ? " – " + fmtShort(st.last) : ""}` : "";
   app.innerHTML = `
     <button class="small" id="back">← All jobs</button>
     <div class="card" style="margin-top:10px">
-      <label style="margin-top:0">Job address</label>
-      <div class="row" style="align-items:center"><input id="j-addr" value="${esc(s.address)}"><button class="small" id="j-addr-save">Save</button></div>
+      <div class="row"><span class="muted">Job address</span>${s.done ? `<span class="pill paid">✓ Finished</span>` : ""}</div>
+      <div class="row" style="align-items:center;margin-top:4px"><input id="j-addr" value="${esc(s.address)}"><button class="small" id="j-addr-save">Save</button></div>
       <div style="margin-top:6px"><a href="${maps}" target="_blank" rel="noopener">📍 Open in Maps</a></div>
-      <div class="actions">${st.active && act?.siteId === s.id ? `<button class="clock out" style="padding:16px;font-size:18px" id="j-out">Clock Out</button>` : `<button class="primary" id="j-in">▶ Clock in at this job</button>`}</div>
-      <div class="grid" style="margin-top:12px">
-        <div class="stat"><div class="muted">Time worked</div><div class="big">${fmtHrs(st.hours)}</div></div>
-        <div class="stat"><div class="muted">Days</div><div class="big">${st.days}</div></div>
-      </div>
+      <div class="stat" style="margin-top:12px"><div class="muted">How long this job took</div><div class="big">${st.days ? `${st.days} day${st.days === 1 ? "" : "s"} · ${fmtHrs(st.hours)}` : "Nothing logged yet"}</div><div class="muted">${span}</div></div>
+      <div class="actions">${st.active && act?.siteId === s.id ? `<button class="clock out" style="padding:16px;font-size:18px" id="j-out">Clock Out</button>` : `<button class="primary" id="j-in">▶ Clock in at this job</button>`}<button class="small" id="j-done">${s.done ? "Reopen job" : "✓ Mark job finished"}</button></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Job notes</h2>
+      <label style="margin-top:0">Paint & materials used</label>
+      <textarea id="j-paint" style="min-height:70px" placeholder="e.g. Sherwin-Williams Duration, Alabaster, 3 gal walls + 1 gal trim, 2 rolls tape">${esc(s.paint)}</textarea>
+      <label>What was done</label>
+      <textarea id="j-work" placeholder="e.g. Prepped & primed living room, 2 coats walls, trim and doors, patched 6 holes">${esc(s.work)}</textarea>
+      <div class="actions"><button class="primary small" id="j-notes-save">Save notes</button></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Photos</h2>
+      <label style="display:inline-block;margin:0"><span class="addbtn">📷 Add photos</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label>
+      <div class="photos" id="photos"></div>
     </div>
 
     <div class="card">
@@ -388,16 +405,10 @@ function viewJob(app) {
     </div>
 
     <div class="card">
-      <div class="row"><h2 style="margin:0">Time worked</h2><button class="small" id="j-add">+ Add time</button></div>
+      <div class="row"><h2 style="margin:0">Days worked</h2><button class="small" id="j-add">+ Add a day</button></div>
       ${st.es.length ? [...st.es].reverse().map(v => `<div class="line tap" data-entry="${v.id}"><div><strong>${fmtDay(v.start)}</strong><div class="muted">${fmtTime(v.start)}${v.end ? " – " + fmtTime(v.end) : " – now"}${v.notes ? " · " + esc(v.notes.slice(0, 70)) : ""}</div></div><span>${v.end ? fmtHrs(hoursOf(v)) : `<span class="pill live">live</span>`} ›</span></div>`).join("") : `<div class="muted" style="margin-top:6px">Nothing yet. Clock in above.</div>`}
     </div>
-
-    <div class="card">
-      <h2 style="margin-top:0">Photos</h2>
-      <label style="display:inline-block;margin:0"><span class="addbtn">📷 Add photos</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label>
-      <div class="photos" id="photos"></div>
-    </div>
-    <div class="actions"><button class="danger small" id="j-del">Delete this job</button></div>`;
+    <div class="actions"><a href="ledger.html" class="small" style="padding:6px 10px;border:1px solid var(--line);border-radius:10px;color:inherit;text-decoration:none">📒 Open the ledger</a><button class="danger small" id="j-del">Delete this job</button></div>`;
   $("#back").onclick = () => { openJob = null; render(); };
   $("#j-addr-save").onclick = () => {
     const a = $("#j-addr").value.trim(); if (!a || a === s.address) return;
@@ -407,6 +418,8 @@ function viewJob(app) {
   };
   if ($("#j-in")) $("#j-in").onclick = () => startEntry(s);
   if ($("#j-out")) $("#j-out").onclick = clockOut;
+  $("#j-done").onclick = () => { s.done = s.done ? "" : "1"; touch(s); save(); render(); };
+  $("#j-notes-save").onclick = () => { s.paint = $("#j-paint").value; s.work = $("#j-work").value; touch(s); save(); toast("Notes saved"); };
   $("#j-pay-save").onclick = () => { s.pay = $("#j-pay").value === "" ? "" : Number($("#j-pay").value); touch(s); save(); toast("Pay saved"); render(); };
   const setPaid = amt => { s.paidAmount = amt; s.paidDate = amt ? todayStr() : ""; touch(s); save(); render(); };
   if ($("#j-full")) $("#j-full").onclick = () => { if (!(Number(s.pay) > 0)) return toast("Enter the job pay first"); setPaid(Number(s.pay)); };
@@ -453,7 +466,7 @@ function viewEntry(app) {
       <label style="margin-top:0">Clocked in</label><input id="v-start" type="datetime-local" value="${esc(v.start)}">
       <label>Clocked out ${v.end ? "" : "(still working)"}</label><input id="v-end" type="datetime-local" value="${esc(v.end)}">
       ${v.end ? `<div class="muted" style="margin-top:6px">⏱ ${fmtHrs(hoursOf(v))}</div>` : ""}
-      <label>What I did this day</label><textarea id="v-notes" placeholder="Prep, coats, colors, products used, problems…">${esc(v.notes)}</textarea>
+      <label>Notes for this day (optional)</label><textarea id="v-notes" placeholder="Prep, coats, colors, products used, problems…">${esc(v.notes)}</textarea>
       <div class="actions"><button class="primary" id="v-save">Save</button><button class="danger" id="v-del">Delete entry</button></div>
     </div>`;
   const back = () => { openEntry = null; render(); };
@@ -480,6 +493,7 @@ function viewPay(app) {
       <div class="stat"><div class="muted">Hours</div><div class="big">${fmtHrs(hrs)}</div></div>
       <div class="stat"><div class="muted">Avg $/hour</div><div class="big">${hrsPaidJobs && total ? money(total / hrsPaidJobs) : "–"}</div></div>
     </div>
+    <a href="ledger.html" style="display:block;text-align:center;padding:12px;margin-bottom:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:inherit;text-decoration:none;font-weight:600">📒 Open the ledger <span class="muted">· by job, by day, day × job grid</span></a>
     ${noPrice.length ? `<div class="card" style="border-color:var(--warn)"><strong>${noPrice.length} job${noPrice.length > 1 ? "s" : ""} with no pay entered</strong><div class="muted">Open each job and enter what it pays so it counts here.</div></div>` : ""}
     <h2>Waiting on payment</h2>
     ${unpaid.length ? unpaid.map(s => `<div class="card"><div class="row tap" data-job-open="${s.id}"><div><strong>${esc(s.address)}</strong><div class="muted">${stats(s).days} day${stats(s).days === 1 ? "" : "s"} · ${fmtHrs(stats(s).hours)}</div></div><strong class="owed">${money(owedOf(s))}</strong></div>
@@ -555,7 +569,7 @@ const jsonPost = (url, body) => gfetch(url, { method: "POST", headers: { "Conten
 // "lastPay" (Sites) and pay/paidAmount/paidDate (Visits) are only read, to migrate older data.
 const SHEET_NAME = "Painter Job Tracker";
 const COLS = {
-  Sites: ["id", "address", "lat", "lng", "pay", "paidAmount", "paidDate", "name", "lastPay", "updated", "deleted"],
+  Sites: ["id", "address", "lat", "lng", "pay", "paidAmount", "paidDate", "paint", "work", "done", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
   Photos: ["id", "siteId", "taken", "driveId", "visitId", "updated", "deleted"],
 };

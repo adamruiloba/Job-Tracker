@@ -3,14 +3,26 @@
 One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your own Google account**.
 
 ## How it works day to day
-**One address = one job.** Everything for that address lives in one place: your days worked, hours, pay, and photos.
-1. **Clock In**: one tap. It finds the street address from your location. At a brand-new place it shows the address so you can fix it before saving. If the address (or a spot within ~300 m) already belongs to a job, you're clocked into that same job. It never makes a second job for the same address.
-2. **Clock Out**: one tap. Then jot what you did that day.
-3. **Jobs tab**: one card per address, showing days, total hours, pay status and photo count. Search by address or notes, or pick a date to see which jobs you worked that day.
-4. **Job page**: clock in or out, total time, the pay you get for the whole job (and what you've received so far), every day worked, and all photos with their dates.
-5. **Pay tab**: what you're owed, what you've been paid, hours, average $/hour. "Mark paid in full" is one tap.
+**One address = one job, and you're paid per job.** Everything for that address lives in one place.
+1. **Clock In**: one tap. It finds the street address from your location. At a brand-new place it shows the address so you can fix it before saving. If the address (or a spot within ~300 m) already belongs to a job, you're clocked into that same job.
+2. **Clock Out**: one tap. Add a quick note for the day if you want.
+3. **Jobs tab**: one card per address, showing how long it took, what was done, and whether it's paid. Search by address or notes, or pick a date.
+4. **Job page** (the heart of the app):
+   - **How long it took**: days, total hours and the date range.
+   - **Job notes**: the paint and materials used, and what was done.
+   - **Photos** for the job, each with its date.
+   - **Pay for this job**: what it pays, what you've received, what's still owed.
+   - **Days worked**: each day's hours and notes.
+   - **Mark job finished** when you're done.
+5. **Pay tab**: what you're owed across all jobs, with "Mark paid in full" in one tap.
 
-Jobs saved by an older version are merged automatically: duplicate addresses become one job, and pay moves from the individual days up to the job.
+## The ledger (accountant view)
+Open `ledger.html` (the 📒 link on the Pay tab and on every job page). It's a clean, printable report with three views:
+- **By job**: one row per job with hours, job pay, paid, due and $/hr, plus totals.
+- **By day**: each day, which job(s) you worked, hours, and the day's share of the job pay.
+- **Day × job grid**: a monthly grid of hours, jobs down the side and days across the top.
+
+Filter by date range or use the quick buttons (this month, last month, this year). Export to CSV or print. It reads the data saved on that phone, so open the Job Tracker first if it looks empty.
 
 ## Put it online (same way as Letters)
 1. In your GitHub repo choose **Add file → Upload files**, upload `index.html`, and commit.
