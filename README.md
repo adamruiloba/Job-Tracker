@@ -3,10 +3,14 @@
 One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your own Google account**.
 
 ## How it works day to day
-1. **Clock In**: one tap. At a brand-new place it guesses the street address and shows it in a box so you can fix it before anything is saved. After that the address is yours: every later clock-in or clock-out at that job reuses it and never guesses again, even if you're parked a bit away. Your recent job sites also show up as one-tap buttons, and pay is pre-filled from last time.
-2. **Clock Out**: one tap. You land on the job page. Add what you did, the pay and photos if you want.
-3. **Jobs tab**: every job by date. Search by address or notes, or pick a date. Open any job to see earlier jobs at the same address.
-4. **Pay tab**: what you're owed, what you've been paid, hours, average $/hour and a month-by-month total. "Mark paid in full" is one tap.
+**One address = one job.** Everything for that address lives in one place: your days worked, hours, pay, and photos.
+1. **Clock In**: one tap. It finds the street address from your location. At a brand-new place it shows the address so you can fix it before saving. If the address (or a spot within ~300 m) already belongs to a job, you're clocked into that same job. It never makes a second job for the same address.
+2. **Clock Out**: one tap. Then jot what you did that day.
+3. **Jobs tab**: one card per address, showing days, total hours, pay status and photo count. Search by address or notes, or pick a date to see which jobs you worked that day.
+4. **Job page**: clock in or out, total time, the pay you get for the whole job (and what you've received so far), every day worked, and all photos with their dates.
+5. **Pay tab**: what you're owed, what you've been paid, hours, average $/hour. "Mark paid in full" is one tap.
+
+Jobs saved by an older version are merged automatically: duplicate addresses become one job, and pay moves from the individual days up to the job.
 
 ## Put it online (same way as Letters)
 1. In your GitHub repo choose **Add file → Upload files**, upload `index.html`, and commit.
