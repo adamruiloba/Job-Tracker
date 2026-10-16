@@ -16,6 +16,7 @@ One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your
    - **Pay for this job**: what it pays, what you've received, what's still owed.
    - **Days worked**: each day's hours and notes.
    - **Mark job finished** when you're done.
+   - **Merge with another job**: if two jobs are really the same place, merge them. Days, photos, notes and pay all move into one job. The app also merges jobs automatically when the house number and street match, even if the city, state or ZIP is spelled differently. Apartments with different unit numbers stay separate.
 5. **Pay tab**: what you're owed across all jobs, with "Mark paid in full" in one tap.
 
 ## The ledger (accountant view)

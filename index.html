@@ -89,6 +89,18 @@ const touch = o => (o.updated = Date.now(), o);
 const ABBR = { street:"st", avenue:"ave", road:"rd", drive:"dr", lane:"ln", court:"ct", boulevard:"blvd", place:"pl", circle:"cir", terrace:"ter", highway:"hwy", parkway:"pkwy", north:"n", south:"s", east:"e", west:"w", apartment:"apt", suite:"ste" };
 // "12 Oak Street" and "12 oak st." are the same address
 const normAddr = a => String(a || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").map(w => ABBR[w] || w).join(" ");
+const SUFFIX = new Set(["st", "ave", "rd", "dr", "ln", "ct", "blvd", "pl", "cir", "ter", "hwy", "pkwy", "way", "loop", "trl", "sq", "aly", "row", "path", "run"]);
+const UNIT = new Set(["apt", "ste", "unit", "bldg", "fl", "rm"]);
+// "45013 Dortmund Ct, Lake Elsinore 92532" and "45013 Dortmund Court" are the same job: compare house number + street (+ unit), not city/state/zip
+function addrKey(a) {
+  const t = normAddr(a).split(" ").filter(Boolean);
+  if (!/^\d/.test(t[0] || "")) return t.join(" ");
+  const i = t.findIndex((w, j) => j > 1 && SUFFIX.has(w));
+  if (i < 0) return t.join(" ");
+  let key = t.slice(0, i + 1);
+  const u = t.findIndex((w, j) => j > i && UNIT.has(w)); if (u > -1) key = key.concat(t.slice(u, u + 2));
+  return key.join(" ");
+}
 function toast(msg, ms=2600) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), ms); }
 function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 
@@ -132,6 +144,17 @@ function resizeImage(file, max=1600) {
 
 /* ---------- migration + "one address = one job" ---------- */
 let redirects = {};
+function absorb(keep, dup) {
+  state.visits.forEach(v => { if (v.siteId === dup.id) { v.siteId = keep.id; touch(v); } });
+  state.photos.forEach(p => { if (p.siteId === dup.id) { p.siteId = keep.id; touch(p); } });
+  if (!(Number(keep.pay) > 0) && Number(dup.pay) > 0) keep.pay = dup.pay;
+  keep.paidAmount = (Number(keep.paidAmount) || 0) + (Number(dup.paidAmount) || 0) || "";
+  if (dup.paidDate && (!keep.paidDate || dup.paidDate > keep.paidDate)) keep.paidDate = dup.paidDate;
+  for (const f of ["paint", "work"]) if (dup[f] && dup[f] !== keep[f]) keep[f] = keep[f] ? keep[f] + "\n" + dup[f] : dup[f];
+  if (dup.done && !keep.done) keep.done = dup.done;
+  if ((keep.lat === "" || keep.lat == null) && dup.lat !== "" && dup.lat != null) { keep.lat = dup.lat; keep.lng = dup.lng; }
+  redirects[dup.id] = keep.id; touch(keep); dup.deleted = true; touch(dup);
+}
 function cleanup() {
   let changed = false; redirects = {};
   // 1. old versions kept pay on each time entry: move it up to the job
@@ -155,21 +178,11 @@ function cleanup() {
   }
   // 2. merge jobs that share an address (oldest id wins, so every phone picks the same one)
   const groups = {};
-  for (const s of state.sites.filter(x => !x.deleted)) { const k = normAddr(s.address); if (k) (groups[k] ||= []).push(s); }
+  for (const s of state.sites.filter(x => !x.deleted)) { const k = addrKey(s.address); if (k) (groups[k] ||= []).push(s); }
   for (const list of Object.values(groups)) {
     if (list.length < 2) continue;
     list.sort((a, b) => a.id.localeCompare(b.id)); const keep = list[0];
-    for (const dup of list.slice(1)) {
-      state.visits.forEach(v => { if (v.siteId === dup.id) { v.siteId = keep.id; touch(v); } });
-      state.photos.forEach(p => { if (p.siteId === dup.id) { p.siteId = keep.id; touch(p); } });
-      if (!(Number(keep.pay) > 0) && Number(dup.pay) > 0) keep.pay = dup.pay;
-      keep.paidAmount = (Number(keep.paidAmount) || 0) + (Number(dup.paidAmount) || 0) || "";
-      if (dup.paidDate && (!keep.paidDate || dup.paidDate > keep.paidDate)) keep.paidDate = dup.paidDate;
-      for (const f of ["paint", "work"]) if (dup[f] && dup[f] !== keep[f]) keep[f] = keep[f] ? keep[f] + "\n" + dup[f] : dup[f];
-      if (dup.done && !keep.done) keep.done = dup.done;
-      if ((keep.lat === "" || keep.lat == null) && dup.lat !== "" && dup.lat != null) { keep.lat = dup.lat; keep.lng = dup.lng; }
-      redirects[dup.id] = keep.id; touch(keep); dup.deleted = true; touch(dup); changed = true;
-    }
+    for (const dup of list.slice(1)) { absorb(keep, dup); changed = true; }
   }
   // 3. photos from older versions hung off an entry
   for (const p of state.photos) if (!p.siteId && p.visitId) {
@@ -197,7 +210,7 @@ function stats(s) {
     first: es[0]?.start || "", last: es[es.length - 1]?.start || "", active: es.some(v => !v.end) };
 }
 function findOrMakeJob(address, lat = "", lng = "") {
-  const k = normAddr(address); let s = jobs().find(x => normAddr(x.address) === k);
+  const k = addrKey(address); let s = jobs().find(x => addrKey(x.address) === k);
   if (s) { if ((s.lat === "" || s.lat == null) && lat !== "") { s.lat = lat; s.lng = lng; touch(s); } return s; }
   s = touch({ id: uid(), name: "", address: address.trim(), lat, lng, pay: "", paidAmount: "", paidDate: "", paint: "", work: "", done: "", deleted: false });
   state.sites.push(s); return s;
@@ -233,7 +246,7 @@ async function clockIn() {
     const near = jobs().filter(s => s.lat !== "" && s.lat != null).map(s => ({ s, d: meters(here, { lat: +s.lat, lng: +s.lng }) })).sort((a, b) => a.d - b.d)[0];
     if (near && near.d < 300) { busy = false; return startEntry(near.s); } // saved job: its saved address is always used
     let address = ""; try { address = await reverseGeocode(here.lat, here.lng); } catch {}
-    const same = address && jobs().find(s => normAddr(s.address) === normAddr(address));
+    const same = address && jobs().find(s => addrKey(s.address) === addrKey(address));
     if (same) { busy = false; return startEntry(same); } // same address as an existing job = same job
     pending = { here, address }; busy = false; render(); // brand-new place: confirm before saving
   } catch (e) {
@@ -424,7 +437,8 @@ function viewJob(app) {
       <div class="row"><h2 style="margin:0">Days worked</h2><button class="small" id="j-add">+ Add a day</button></div>
       ${st.es.length ? [...st.es].reverse().map(v => `<div class="line tap" data-entry="${v.id}"><div><strong>${fmtDay(v.start)}</strong><div class="muted">${fmtTime(v.start)}${v.end ? " – " + fmtTime(v.end) : " – now"}${v.notes ? " · " + esc(v.notes.slice(0, 70)) : ""}</div></div><span>${v.end ? fmtHrs(hoursOf(v)) : `<span class="pill live">live</span>`} ›</span></div>`).join("") : `<div class="muted" style="margin-top:6px">Nothing yet. Clock in above.</div>`}
     </div>
-    <div class="actions"><a href="ledger.html" class="small" style="padding:6px 10px;border:1px solid var(--line);border-radius:10px;color:inherit;text-decoration:none">📒 Open the ledger</a><button class="danger small" id="j-del">Delete this job</button></div>`;
+    <div id="merge-box"></div>
+    <div class="actions"><button class="small" id="j-merge">⇄ Merge with another job</button><a href="ledger.html" class="small" style="padding:6px 10px;border:1px solid var(--line);border-radius:10px;color:inherit;text-decoration:none">📒 Open the ledger</a><button class="danger small" id="j-del">Delete this job</button></div>`;
   $("#back").onclick = () => { openJob = null; render(); };
   $("#j-addr-save").onclick = () => {
     const a = $("#j-addr").value.trim(); if (!a || a === s.address) return;
@@ -443,6 +457,19 @@ function viewJob(app) {
   if ($("#j-unpay")) $("#j-unpay").onclick = () => setPaid("");
   $("#j-add").onclick = () => { const d = todayStr(); const v = touch({ id: uid(), siteId: s.id, start: d + "T08:00", end: d + "T16:00", notes: "", deleted: false }); state.visits.push(v); save(); openEntry = v.id; render(); };
   app.querySelectorAll("[data-entry]").forEach(c => c.onclick = () => { openEntry = c.dataset.entry; render(); });
+  $("#j-merge").onclick = () => {
+    const others = jobs().filter(x => x.id !== s.id).sort((a, b) => a.address.localeCompare(b.address)), box = $("#merge-box");
+    if (!others.length) return toast("There's no other job to merge");
+    box.innerHTML = `<div class="card"><strong>Merge another job into this one</strong><div class="muted">Moves that job's days, photos, notes and pay into <b>${esc(s.address)}</b>, then removes it.</div>
+      <label>Job to merge in</label><select id="mg-sel"><option value="">Choose…</option>${others.map(o => `<option value="${o.id}">${esc(o.address)}</option>`).join("")}</select>
+      <div class="actions"><button class="primary small" id="mg-go">Merge</button><button class="small" id="mg-x">Cancel</button></div></div>`;
+    $("#mg-x").onclick = () => { box.innerHTML = ""; };
+    $("#mg-go").onclick = () => {
+      const dup = jobById($("#mg-sel").value); if (!dup) return toast("Choose a job");
+      if (!confirm(`Merge "${dup.address}" into "${s.address}"?`)) return;
+      absorb(s, dup); save(); openJob = s.id; toast("Jobs merged"); render();
+    };
+  };
   $("#j-del").onclick = () => { if (!confirm("Delete this job, all its time and its photo list?")) return; entriesOf(s).forEach(v => touch(Object.assign(v, { deleted: true }))); photosOf(s).forEach(p => touch(Object.assign(p, { deleted: true }))); touch(Object.assign(s, { deleted: true })); save(); openJob = null; render(); };
   $("#ph-in").onchange = async e => {
     let n = 0;
