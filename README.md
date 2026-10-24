@@ -3,26 +3,23 @@
 One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your own Google account**.
 
 ## How it works day to day
-**One address = one job, and you're paid per job.** Everything for that address lives in one place.
-1. **Clock In**: type the job's address (or pick one you've already saved) and tap **Clock In**. The same address is always the same job, even if you type it a little differently. Jobs you've worked recently show up as one-tap buttons. There's no GPS: nothing about your location is used or sent anywhere.
-2. **Clock Out**: one tap. You stay on the Clock tab, so the next job is one tap away. Adding a note for the day is optional ("Add notes").
-   - **Two jobs in one day?** While clocked in, tap **Switch to another job**. It clocks you out and into the next job (a recent job, or type an address). Each job keeps its own hours, and the ledger shows both under one day total.
-   - If two entries overlap in time, the app warns you when you save.
-3. **Jobs tab**: one card per address, showing how long it took, what was done, and whether it's paid. Search by address or notes, or pick a date.
-4. **Job page** (the heart of the app):
-   - **How long it took**: days, total hours and the date range.
-   - **Job notes**: the paint and materials used, and what was done.
-   - **Photos** for the job, each with its date.
-   - **Pay for this job**: what it pays, what you've received, what's still owed.
-   - **Days worked**: each day's hours and notes.
-   - **Mark job finished** when you're done.
-   - **Merge with another job**: if two jobs are really the same place, merge them. Days, photos, notes and pay all move into one job. The app also merges jobs automatically when the house number and street match, even if the city, state or ZIP is spelled differently. Apartments with different unit numbers stay separate.
-5. **Pay tab**: what you're owed across all jobs, with "Mark paid in full" in one tap.
+**One address = one job, and you're paid per job.** Everything for that address lives on its job page.
+1. **Clock tab**: type the job's address (or pick one you've already saved) and tap **Clock In**. While you're clocked in, tap names to say **who's working today**. **Clock Out** is one tap. **Switch job** moves you to a second job the same day.
+2. **Jobs tab**: one card per job showing the owner's name and phone (tap to call), days, hours, crew size, what was done, and pay status. Cards have a **🧭 Directions** button for Google Maps.
+   - **Search** finds a job by owner name, phone number, address, paint, notes, contacts, or crew name. Filter by Open, Finished or Unpaid.
+3. **Job page**, in five sections:
+   - **📋 Details**: address, **owner** (first and last name, phone, special info), and the paint and what was done.
+   - **👷 Days & crew**: every day worked with exactly who was there. Day one might be 2 people, day three 4, the last day 1. Totals show each person's days and man-hours.
+   - **📷 Photos**, each with its date.
+   - **📝 Notes**: dated notes (neighbor complaints, requests, gate codes) and **other contacts** such as the building owner, with name, role and phone.
+   - **💵 Pay**: what the job pays, what you've received, what's still owed.
+4. **Pay tab**: what you're owed across all jobs, with "Mark paid in full" in one tap.
+5. **Settings → Your crew**: add the people who work with you once, then just tap names each day.
 
 ## The ledger (accountant view)
 Open `ledger.html` (the 📒 link on the Pay tab and on every job page). It's a clean, printable report with three views:
-- **By job**: one row per job with hours, job pay, paid, due and $/hr, plus totals.
-- **By day**: each day, which job(s) you worked, hours, and the day's share of the job pay.
+- **By job**: one row per job with the owner, hours, man-hours, job pay, paid, due and $/hr, plus totals.
+- **By day**: each day, which job(s) you worked, hours, who was on the crew, and the day's share of the job pay.
 - **Day × job grid**: a monthly grid of hours, jobs down the side and days across the top.
 
 Filter by date range or use the quick buttons (this month, last month, this year). Export to CSV or print. It reads the data saved on that phone, so open the Job Tracker first if it looks empty.

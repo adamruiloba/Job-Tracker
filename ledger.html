@@ -82,6 +82,8 @@ const $ = (s, r=document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let state = { sites: [], visits: [] };
 try { const s = JSON.parse(localStorage.getItem("painterJobs.v2")); if (s) state = s; } catch {}
+const peopleById = Object.fromEntries((state.people || []).map(p => [p.id, p.name]));
+const crewOf = v => String(v.crew || "").split(",").filter(id => peopleById[id]).map(id => peopleById[id]);
 const live = o => !o.deleted;
 const jobs = (state.sites || []).filter(live);
 const jobById = Object.fromEntries(jobs.map(s => [s.id, s]));
@@ -98,9 +100,9 @@ const fmtT = s => new Date(s).toLocaleTimeString(undefined, { hour: "numeric", m
 const monthName = m => new Date(m + "-15T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
 /* per-job totals (whole job) */
-const agg = {};
+const agg = {}; // man-hours = hours x people on the job that day
 for (const s of jobs) agg[s.id] = { s, es: [], hours: 0, days: new Set(), first: "", last: "" };
-for (const v of entries) { const a = agg[v.siteId]; a.es.push(v); a.hours += hrs(v); a.days.add(dayOf(v.start)); a.first ||= dayOf(v.start); a.last = dayOf(v.start); }
+for (const v of entries) { const a = agg[v.siteId]; a.es.push(v); a.hours += hrs(v); a.man = (a.man || 0) + hrs(v) * crewOf(v).length; a.days.add(dayOf(v.start)); a.first ||= dayOf(v.start); a.last = dayOf(v.start); }
 
 /* period */
 let from = "", to = "", view = "job", gridMonth = "", lastCsv = null;
@@ -144,12 +146,12 @@ function viewJob(js) {
     const s = a.s, p = num(s.pay), g = num(s.paidAmount), bal = p - g;
     lastCsvRows.push([s.address, s.done ? "Finished" : "Open", a.first, a.last, a.days.size, h2(a.hours), p || "", g || "", p ? bal : "", p && a.hours ? (p / a.hours).toFixed(2) : ""]);
     const when = a.es.length ? `${fmtShort(a.first)}${a.first !== a.last ? "–" + fmtShort(a.last) : ""} · ` : "";
-    return `<tr><td class="job first">${esc(s.address)}<div class="muted" style="font-size:12px">${a.es.length ? a.days.size + (a.days.size === 1 ? " day · " : " days · ") : ""}${when}${s.done ? "Finished" : "Open"}</div>${s.work || s.paint ? `<div class="muted hm" style="font-size:12px">${esc((s.work || "").slice(0, 80))}${s.paint ? " · Paint: " + esc(s.paint.slice(0, 60)) : ""}</div>` : ""}</td>
-      <td class="n hm">${a.days.size}</td><td class="n">${h2(a.hours)}</td><td class="n">${p ? m2(p) : "—"}</td><td class="n">${g ? m2(g) : "—"}</td><td class="n">${p ? m2(bal) : "—"}</td><td class="n hm">${p && a.hours ? m2(p / a.hours) : "—"}</td></tr>`;
+    return `<tr><td class="job first">${esc(s.address)}${s.ownerFirst || s.ownerLast ? `<div class="muted" style="font-size:12px">👤 ${esc([s.ownerFirst, s.ownerLast].filter(Boolean).join(" "))}${s.ownerPhone ? " · " + esc(s.ownerPhone) : ""}</div>` : ""}<div class="muted" style="font-size:12px">${a.es.length ? a.days.size + (a.days.size === 1 ? " day · " : " days · ") : ""}${when}${s.done ? "Finished" : "Open"}</div>${s.work || s.paint ? `<div class="muted hm" style="font-size:12px">${esc((s.work || "").slice(0, 80))}${s.paint ? " · Paint: " + esc(s.paint.slice(0, 60)) : ""}</div>` : ""}</td>
+      <td class="n hm">${a.days.size}</td><td class="n">${h2(a.hours)}</td><td class="n hm">${a.man ? h2(a.man) : "—"}</td><td class="n">${p ? m2(p) : "—"}</td><td class="n">${g ? m2(g) : "—"}</td><td class="n">${p ? m2(bal) : "—"}</td><td class="n hm">${p && a.hours ? m2(p / a.hours) : "—"}</td></tr>`;
   });
-  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, h: t.h + a.hours, p: t.p + num(a.s.pay), g: t.g + num(a.s.paidAmount) }), { d: 0, h: 0, p: 0, g: 0 });
-  if (rows.length) rows.push(`<tr class="total"><td class="first">Total · ${js.length} job${js.length === 1 ? "" : "s"}</td><td class="n hm">${T.d}</td><td class="n">${h2(T.h)}</td><td class="n">${m2(T.p)}</td><td class="n">${m2(T.g)}</td><td class="n">${m2(T.p - T.g)}</td><td class="hm"></td></tr>`);
-  return table([["Job"], ["Days", "n hm"], ["Hrs", "n"], ["Pay", "n"], ["Paid", "n"], ["Due", "n"], ["$/hr", "n hm"]], rows,
+  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, m: t.m + (a.man || 0), h: t.h + a.hours, p: t.p + num(a.s.pay), g: t.g + num(a.s.paidAmount) }), { d: 0, m: 0, h: 0, p: 0, g: 0 });
+  if (rows.length) rows.push(`<tr class="total"><td class="first">Total · ${js.length} job${js.length === 1 ? "" : "s"}</td><td class="n hm">${T.d}</td><td class="n">${h2(T.h)}</td><td class="n hm">${T.m ? h2(T.m) : "—"}</td><td class="n">${m2(T.p)}</td><td class="n">${m2(T.g)}</td><td class="n">${m2(T.p - T.g)}</td><td class="hm"></td></tr>`);
+  return table([["Job"], ["Days", "n hm"], ["Hrs", "n"], ["Man-hrs", "n hm"], ["Pay", "n"], ["Paid", "n"], ["Due", "n"], ["$/hr", "n hm"]], rows,
     { note: "A job is listed in the period of its last day worked. Days = days worked on that job, so a day with two jobs counts once for each. Totals use whole-job figures. Pay = job pay, Paid = received, Due = still owed." });
 }
 
@@ -164,8 +166,8 @@ function viewDay(es) {
     const list = byDay[d]; let dh = 0, dp = 0;
     list.forEach((v, i) => {
       const a = agg[v.siteId], h = hrs(v), p = num(a.s.pay) && a.hours ? num(a.s.pay) * h / a.hours : 0; dh += h; dp += p;
-      lastCsvRows.push([d, a.s.address, fmtT(v.start), fmtT(v.end), h2(h), p ? p.toFixed(2) : "", (v.notes || "").replace(/\s+/g, " ")]);
-      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)}${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div></td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
+      lastCsvRows.push([d, a.s.address, fmtT(v.start), fmtT(v.end), h2(h), crewOf(v).length || "", crewOf(v).join("; "), p ? p.toFixed(2) : "", (v.notes || "").replace(/\s+/g, " ")]);
+      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)}${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div>${crewOf(v).length ? `<div class="muted" style="font-size:12px">👷 ${crewOf(v).length}: ${esc(crewOf(v).join(", "))}</div>` : ""}</td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
     });
     if (list.length > 1) rows.push(`<tr class="sub"><td class="first">Day total</td><td>${list.length} jobs</td><td class="n">${h2(dh)}</td><td class="n">${dp ? m2(dp) : "—"}</td></tr>`);
     mH += dh; mP += dp; totH += dh; totP += dp;
@@ -199,7 +201,7 @@ function wireGrid() { const g = $("#gm"); if (g) g.onchange = e => { gridMonth =
 
 /* CSV / events */
 let lastCsvRows = [], lastCsvHead = null;
-const HEADS = { job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Pay share", "Notes"] };
+const HEADS = { job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Pay share", "Notes"] };
 const _draw = draw; draw = function () { lastCsvRows = []; lastCsvHead = null; _draw(); };
 function setView(v) { view = v; draw(); }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setView(b.dataset.v));
