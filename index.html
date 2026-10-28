@@ -797,6 +797,28 @@ function tabDetails(box, s) {
   };
 }
 
+/* duplicate guard: every photo gets a fingerprint of its picture, so the same photo can't be saved twice on a job */
+async function blobHash(blob) { const d = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32); }
+async function ensureHashes(s) { for (const p of photosOf(s)) { if (p.hash) continue; const rec = await blobGet(p.id); if (rec && rec.blob) { p.hash = await blobHash(rec.blob); touch(p); } } }
+async function addJobPhoto(s, file, o) {
+  const blob = await resizeImage(file), hash = await blobHash(blob);
+  await ensureHashes(s);
+  const dup = photosOf(s).find(x => x.hash === hash);
+  if (dup) { if (o.area && !dup.area) { dup.area = o.area; touch(dup); } return "dup"; }
+  const id = uid(); await blobPut(id, blob);
+  state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: o.label, caption: "", area: o.area || "", hash, deleted: false })); return "added";
+}
+async function removeDuplicatePhotos(s) {
+  await ensureHashes(s); const seen = new Map(); let n = 0, cov = s.cover;
+  const rank = p => (p.id === cov ? 4 : 0) + (p.caption ? 2 : 0) + (p.area ? 1 : 0);
+  for (const p of photosOf(s).sort((a, b) => rank(b) - rank(a) || a.id.localeCompare(b.id))) {
+    if (!p.hash) continue; const keep = seen.get(p.hash);
+    if (!keep) { seen.set(p.hash, p); continue; }
+    if (!keep.area && p.area) { keep.area = p.area; touch(keep); } if (!keep.caption && p.caption) { keep.caption = p.caption; touch(keep); }
+    if (s.cover === p.id) { s.cover = keep.id; touch(s); } touch(Object.assign(p, { deleted: true })); n++;
+  }
+  save(); return n;
+}
 function tabDays(box, s, st) {
   const crewRows = [...st.crew.entries()].map(([id, days]) => ({ name: personById(id).name, n: days.size })).sort((a, b) => b.n - a.n);
   box.innerHTML = `
@@ -826,17 +848,19 @@ function tabPhotos(box, s) {
       <div class="actions"><label style="margin:0;flex:1"><span class="btn primary block">📷 Take photo</span><input id="ph-cam" type="file" accept="image/*" capture="environment" style="display:none"></label><label style="margin:0;flex:1"><span class="btn block">🖼 Choose</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label></div></div>
     ${ps.length ? `<div class="filters"><button data-pf="all" class="${photoFilter === "all" ? "on" : ""}">All ${ps.length}</button>${PLABELS.filter(([k]) => n(k)).map(([k, l]) => `<button data-pf="${k}" class="${photoFilter === k ? "on" : ""}">${l} ${n(k)}</button>`).join("")}</div>` : `<div class="empty"><span class="big-emoji">🖼</span>No photos yet.</div>`}
     <div id="photo-groups"></div>
-    <div class="muted" style="margin:8px 4px">Photos of paint buckets and labels live in the 🎨 Paints section.</div>`;
+    <div class="muted" style="margin:8px 4px">Photos of paint buckets and labels live in the 🎨 Paints section.</div>
+    ${ps.length > 1 ? `<div class="actions"><button class="small" id="ph-dedupe">🧹 Remove duplicate photos</button></div>` : ""}`;
+  if ($("#ph-dedupe")) $("#ph-dedupe").onclick = async () => { const n = await removeDuplicatePhotos(s); toast(n ? `Removed ${n} duplicate${n > 1 ? "s" : ""}` : "No duplicates found"); render(); };
   box.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { photoLabel = b.dataset.pl; box.querySelectorAll("[data-pl]").forEach(x => x.classList.toggle("on", x === b)); });
   box.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { photoFilter = b.dataset.pf; render(); });
   $("#ph-area").onchange = () => { photoArea = chooseAreaValue(s, $("#ph-area").value); $("#ph-area").innerHTML = areaOptions(s, photoArea); };
   const add = async e => {
-    let k = 0;
+    let k = 0, d = 0;
     for (const f of e.target.files) {
-      try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: photoLabel, caption: "", area: photoArea, deleted: false })); k++; }
+      try { (await addJobPhoto(s, f, { label: photoLabel, area: photoArea })) === "dup" ? d++ : k++; }
       catch { toast("Skipped a file that isn't a photo"); }
     }
-    if (k) { save(); toast(`${k} photo${k > 1 ? "s" : ""} added to ${PLABELS.find(x => x[0] === photoLabel)[1]}`); } render();
+    save(); if (k) toast(`${k} photo${k > 1 ? "s" : ""} added to ${PLABELS.find(x => x[0] === photoLabel)[1]}` + (d ? ` · ${d} already saved, skipped` : "")); else if (d) toast(d === 1 ? "That photo is already saved on this job" : `${d} photos were already saved, skipped`); render();
   };
   $("#ph-cam").onchange = add; $("#ph-in").onchange = add;
   drawPhotos(s);
@@ -1129,8 +1153,9 @@ function viewArea(app) {
   app.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { photoLabel = b.dataset.pl; app.querySelectorAll("[data-pl]").forEach(x => x.classList.toggle("on", x === b)); });
   const add = async e => {
     let k = 0;
-    for (const f of e.target.files) { try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: photoLabel, caption: "", area: name, deleted: false })); k++; } catch { toast("Skipped a file that isn't a photo"); } }
-    if (k) { save(); toast(`${k} photo${k > 1 ? "s" : ""} added to ${name}`); } render();
+    let d = 0;
+    for (const f of e.target.files) { try { (await addJobPhoto(s, f, { label: photoLabel, area: name })) === "dup" ? d++ : k++; } catch { toast("Skipped a file that isn't a photo"); } }
+    save(); if (k) toast(`${k} photo${k > 1 ? "s" : ""} added to ${name}` + (d ? ` · ${d} already saved, moved to ${name}` : "")); else if (d) toast("Already saved on this job — now filed under " + name); render();
   };
   $("#ar-cam").onchange = add; $("#ar-in").onchange = add;
   fillPhotoGrid($("#ar-photos"), photos, s);
@@ -1347,7 +1372,7 @@ const SHEET_NAME = "Painter Job Tracker";
 const COLS = {
   Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "lat", "lng", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
-  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "updated", "deleted"],
+  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "hash", "updated", "deleted"],
   Areas: ["id", "siteId", "address", "name", "updated", "deleted"],
   Paints: ["id", "siteId", "address", "brand", "product", "type", "colorCode", "colorName", "sheen", "base", "orderNo", "mixedDate", "store", "storePhone", "productCode", "formula", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
