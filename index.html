@@ -958,11 +958,45 @@ function autoPlan(avail) {
     .map(s => { const amt = Math.min(owedOf(s), Math.max(0, left)); left = r2(left - amt); return { s, amt }; });
 }
 function removePayment(p) { touch(Object.assign(p, { deleted: true })); state.applied.filter(a => a.paymentId === p.id).forEach(a => touch(Object.assign(a, { deleted: true }))); }
+/* messages to the boss: a confirmation for one payment, or a full update of every job */
+const bossFirst = () => (state.settings.bossName || "").split(" ")[0] || "there";
+const myNameSig = () => state.settings.myName || "";
+function jobSpan(s) { const st = stats(s), a = dayOf(st.first), b = dayOf(st.last); return st.days ? `${fmtShort(a)}${b !== a ? "–" + fmtShort(b) : ""}, ${st.days} day${st.days === 1 ? "" : "s"}` : "no days yet"; }
+function stillOwedLines(skipIds) { return jobs().filter(s => owedOf(s) > 0 && !skipIds.includes(s.id)).sort((a, b) => (dayOf(stats(a).first) || "9").localeCompare(dayOf(stats(b).first) || "9")).map(s => `• ${streetOf(s.address)} (${jobSpan(s)}): ${money(owedOf(s))} owed`); }
+function confirmText(p) {
+  const ap = appliedOfPayment(p), un = unappliedOf(p), rest = stillOwedLines(ap.map(a => a.siteId)), totalOwed = jobs().reduce((t, s) => t + owedOf(s), 0);
+  return [`Hi ${bossFirst()},`, "", `Confirming I received ${money(p.amount)} on ${fmtDay(p.date)}${p.note ? " (" + p.note + ")" : ""}. Here is where it went:`, "",
+    ...ap.map(a => { const s = jobById(a.siteId); return `• ${streetOf(s.address)} (${jobSpan(s)}): ${money(a.amount)} → ${owedOf(s) > 0 ? money(owedOf(s)) + " still owed" : "paid in full"}`; }),
+    ...(un > 0 ? [`• Not applied to a job yet: ${money(un)}`] : []),
+    "", ...(rest.length ? ["Still owed on other jobs:", ...rest, ""] : []), `Total still owed to me: ${money(totalOwed)}`, "", "Thanks!", myNameSig()].filter((x, i, a) => !(x === "" && a[i - 1] === "" )).join("\n").trim();
+}
+function updateText() {
+  const js = jobs().filter(s => stats(s).days).sort((a, b) => (dayOf(stats(a).first)).localeCompare(dayOf(stats(b).first)));
+  const earned = js.reduce((t, s) => t + jobTotal(s), 0), paid = js.reduce((t, s) => t + paidOf(s), 0);
+  return [`Hi ${bossFirst()}, here's where we stand:`, "", ...js.map(s => `• ${streetOf(s.address)} (${jobSpan(s)}): earned ${money(jobTotal(s))} · paid ${money(paidOf(s))} · ${owedOf(s) > 0 ? money(owedOf(s)) + " owed" : "paid in full"}`),
+    "", `Total earned ${money(earned)} · received ${money(paid)} · still owed ${money(js.reduce((t, s) => t + owedOf(s), 0))}`, ...(paymentsNewest().length ? ["", "Payments received:", ...paymentsNewest().slice(0, 6).reverse().map(p => `• ${fmtDay(p.date)}: ${money(p.amount)}`)] : []), "", "Thanks!", myNameSig()].join("\n").trim();
+}
+/* sheet with the message ready to send by text, email or any app */
+function openSendSheet(title, text, subject) {
+  const st = state.settings, bg = document.createElement("div"); bg.className = "sheet-bg";
+  bg.innerHTML = `<div class="sheet"><h3 style="margin:0 0 6px">${esc(title)}</h3><div class="muted" style="margin-bottom:8px">Read it, change anything, then pick how to send.</div>
+    <textarea id="sd-text" style="min-height:240px;font-size:15px">${esc(text)}</textarea>
+    <div class="row top" style="gap:8px"><div class="grow"><label>${esc(bossFirst() === "there" ? "Their" : bossFirst() + "'s")} phone</label><input id="sd-phone" type="tel" value="${esc(st.bossPhone || "")}" placeholder="For texting"></div><div class="grow"><label>Email</label><input id="sd-mail" type="email" value="${esc(st.bossEmail || "")}" placeholder="For email"></div></div>
+    <div class="actions"><button class="primary" id="sd-sms">💬 Text</button><button class="primary" id="sd-email">✉️ Email</button></div>
+    <div class="actions"><button id="sd-share">📤 Other app</button><button id="sd-copy">📋 Copy</button><button id="sd-x">Close</button></div></div>`;
+  document.body.append(bg); bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  const msg = () => $("#sd-text").value, remember = () => { st.bossPhone = $("#sd-phone").value.trim(); st.bossEmail = $("#sd-mail").value.trim(); save(); };
+  $("#sd-sms").onclick = () => { remember(); location.href = `sms:${st.bossPhone.replace(/[^\d+]/g, "")}?&body=${encodeURIComponent(msg())}`; };
+  $("#sd-email").onclick = () => { remember(); location.href = `mailto:${encodeURIComponent(st.bossEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg())}`; };
+  $("#sd-share").onclick = async () => { remember(); if (navigator.share) { try { await navigator.share({ title: subject, text: msg() }); } catch {} } else { try { await navigator.clipboard.writeText(msg()); toast("Copied"); } catch { prompt("Copy this:", msg()); } } };
+  $("#sd-copy").onclick = async () => { try { await navigator.clipboard.writeText(msg()); toast("Copied"); } catch { prompt("Copy this:", msg()); } };
+  $("#sd-x").onclick = () => bg.remove();
+}
 const payerName = () => state.settings.bossName || "";
 function appliedLine(p) { const ap = appliedOfPayment(p); return ap.length ? ap.map(a => `${esc(streetOf(jobById(a.siteId).address))} ${money(a.amount)}`).join(" · ") : ""; }
 /* the "I got paid" sheet: type the amount, see which jobs it covers (oldest first), adjust, save */
 function openPaySheet(ex) {
-  const bg = document.createElement("div"); bg.className = "sheet-bg"; let plan = [], avail = ex ? unappliedOf(ex) : 0;
+  const bg = document.createElement("div"); bg.className = "sheet-bg"; let plan = [], avail = ex ? unappliedOf(ex) : 0, saved = null;
   bg.innerHTML = `<div class="sheet"><h3 style="margin:0 0 8px">💵 ${ex ? "Apply leftover money" : "I got paid"}</h3>
     ${ex ? `<div class="muted">From ${esc(ex.from || "—")} · ${fmtDay(ex.date)} · <b>${money(avail)}</b> not applied yet</div>` : `
     <label>How much did you receive?</label><div class="money"><input id="ps-amt" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
@@ -988,15 +1022,24 @@ function openPaySheet(ex) {
     if (left() < 0) return toast("Those add up to more than you received");
     const given = plan.filter(r => r.amt > 0);
     if (ex) { given.forEach(r => state.applied.push(touch({ id: uid(), paymentId: ex.id, siteId: r.s.id, amount: r2(r.amt), deleted: false }))); }
-    else addPayment({ amount: avail, date: $("#ps-date").value, from: $("#ps-from").value, note: $("#ps-note").value }, given);
+    else saved = addPayment({ amount: avail, date: $("#ps-date").value, from: $("#ps-from").value, note: $("#ps-note").value }, given);
     save(); bg.remove(); toast(given.length ? `Saved · applied to ${given.length} job${given.length > 1 ? "s" : ""}` : "Saved"); render();
+    if (!ex) offerSend(saved);
   };
 }
 const paymentCard = (p, only) => { const ap = appliedOfPayment(p), un = unappliedOf(p);
-  return `<div class="card"><div class="row top"><div><div style="font-weight:800;font-size:17px">${money(p.amount)}</div><div class="muted">${fmtDay(p.date)}${p.from ? " · from " + esc(p.from) : ""}${p.note ? " · " + esc(p.note) : ""}</div></div><button class="small danger" data-delpay="${p.id}" aria-label="Delete payment">✕</button></div>
+  return `<div class="card"><div class="row top"><div><div style="font-weight:800;font-size:17px">${money(p.amount)}</div><div class="muted">${fmtDay(p.date)}${p.from ? " · from " + esc(p.from) : ""}${p.note ? " · " + esc(p.note) : ""}</div></div><span class="row" style="gap:6px"><button class="small soft" data-sendpay="${p.id}" aria-label="Send confirmation">📤</button><button class="small danger" data-delpay="${p.id}" aria-label="Delete payment">✕</button></span></div>
     ${ap.length ? `<div class="muted" style="margin-top:6px">Applied to: ${appliedLine(p)}</div>` : ""}
     ${un > 0 ? `<div class="row" style="margin-top:8px"><span class="chip part">${money(un)} not applied yet</span><button class="small soft" data-applypay="${p.id}">Apply to jobs</button></div>` : ""}</div>`; };
+function offerSend(p) {
+  const bg = document.createElement("div"); bg.className = "sheet-bg";
+  bg.innerHTML = `<div class="sheet"><h3 style="margin:0 0 6px">✅ Payment saved</h3><div class="muted">Want to let ${esc(bossFirst() === "there" ? "your boss" : bossFirst())} know where it went? Keeps everything clear, no surprises.</div>
+    <div class="actions"><button class="primary" id="of-yes">📤 Send confirmation</button><button id="of-no">Not now</button></div></div>`;
+  document.body.append(bg); bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  $("#of-no").onclick = () => bg.remove(); $("#of-yes").onclick = () => { bg.remove(); openSendSheet("📤 Confirm payment", confirmText(p), `Payment received ${fmtDay(p.date)}`); };
+}
 function hookPayments(root) {
+  root.querySelectorAll("[data-sendpay]").forEach(b => b.onclick = () => { const p = paymentById(b.dataset.sendpay); openSendSheet("📤 Confirm payment", confirmText(p), `Payment received ${fmtDay(p.date)}`); });
   root.querySelectorAll("[data-delpay]").forEach(b => b.onclick = () => { const p = paymentById(b.dataset.delpay); if (p && confirm(`Delete this ${money(p.amount)} payment from ${fmtDay(p.date)}?\n\nThe jobs it paid go back to owing.`)) { removePayment(p); save(); render(); } });
   root.querySelectorAll("[data-applypay]").forEach(b => b.onclick = () => openPaySheet(paymentById(b.dataset.applypay)));
 }
@@ -1358,6 +1401,7 @@ function viewPay(app) {
     <div class="bignums"><div><small>Owed to me</small><b class="owed">${money(owed)}</b></div><div><small>Received</small><b class="paid">${money(paid)}</b></div></div>
     <button class="primary block" id="got-paid" style="margin:4px 0 12px;min-height:54px;font-size:18px">💵 I got paid</button>
     ${pending > 0 ? `<div class="card" style="background:var(--warn-soft)"><strong>${money(pending)} received but not applied to a job yet</strong><div class="muted">Find it under Payments received and tap “Apply to jobs”.</div></div>` : ""}
+    <button class="block" id="send-update" style="margin:0 0 12px">📤 Send ${esc(state.settings.bossName || "my boss")} an update</button>
     <a class="card row tap" href="report.html" style="color:inherit;text-decoration:none"><span><strong>📤 Report for ${esc(state.settings.bossName || "your boss")}</strong><div class="muted">Jobs, days worked, owed and paid. Easy to send.</div></span><span style="font-size:22px">›</span></a>
     <a class="card row tap" href="ledger.html" style="color:inherit;text-decoration:none"><span><strong>📒 Ledger</strong><div class="muted">By job, by day, and a day × job grid</div></span><span style="font-size:22px">›</span></a>
     ${noPrice.length ? `<div class="card" style="background:var(--warn-soft)"><strong>${noPrice.length} job${noPrice.length > 1 ? "s" : ""} with no pay yet</strong><div class="muted">Open each job → Pay and set the day rates so they count here.</div></div>` : ""}
@@ -1372,6 +1416,7 @@ function viewPay(app) {
     <div class="actions"><button id="csv-jobs">⬇️ Jobs (CSV)</button><button id="csv-time">⬇️ Days (CSV)</button></div>`;
   app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = () => goJob(c.dataset.jobOpen, "pay"));
   $("#got-paid").onclick = () => openPaySheet();
+  $("#send-update").onclick = () => openSendSheet("📤 Send an update", updateText(), "Job and payment update");
   hookPayments(app);
   app.querySelectorAll("[data-full]").forEach(b => b.onclick = () => { const s = jobById(b.dataset.full); addPayment({ amount: owedOf(s), date: todayStr(), from: payerName() }, [{ s, amt: owedOf(s) }]); save(); toast("Marked paid"); render(); });
   const qt = x => `"${String(x ?? "").replace(/"/g, '""')}"`;
@@ -1391,6 +1436,7 @@ function viewSettings(app) {
       <div class="actions"><button class="primary" id="r-save">Save rates</button></div></div>
     <div class="card"><h3>📤 Report</h3><div class="muted">Who the pay report is for, and your name on it.</div>
       <div class="two"><div><label>Send reports to</label><input id="b-name" value="${esc(st.bossName)}" placeholder="Boss's name"></div><div><label>Your name</label><input id="m-name" value="${esc(st.myName)}" placeholder="Your name"></div></div>
+      <div class="two"><div><label>Their phone (to text)</label><input id="b-phone" type="tel" value="${esc(st.bossPhone || "")}" placeholder="951-555-0100"></div><div><label>Their email</label><input id="b-mail" type="email" value="${esc(st.bossEmail || "")}" placeholder="name@email.com"></div></div>
       <div class="actions"><button class="primary" id="b-save">Save</button></div></div>
     <div class="card">
       <h3>☁️ Google sync (Sheets + Drive)</h3>
@@ -1408,7 +1454,7 @@ function viewSettings(app) {
   app.querySelectorAll("[data-pren]").forEach(b => b.onclick = () => { const p = personById(b.dataset.pren), n = (prompt("Rename employee:", p.name) || "").trim(); if (n && n !== p.name) { p.name = n; touch(p); save(); toast("Renamed"); render(); } });
   app.querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => { if (confirm("Remove this employee from your list? Past days keep their name.")) { touch(Object.assign(personById(b.dataset.pdel), { deleted: true })); save(); render(); } });
   $("#r-save").onclick = () => { st.fullRate = $("#r-full").value === "" ? "" : Number($("#r-full").value); st.halfRate = $("#r-half").value === "" ? "" : Number($("#r-half").value); save(); toast("Rates saved"); };
-  $("#b-save").onclick = () => { st.bossName = $("#b-name").value.trim(); st.myName = $("#m-name").value.trim(); save(); toast("Saved"); };
+  $("#b-save").onclick = () => { st.bossName = $("#b-name").value.trim(); st.myName = $("#m-name").value.trim(); st.bossPhone = $("#b-phone").value.trim(); st.bossEmail = $("#b-mail").value.trim(); save(); toast("Saved"); };
   $("#s-save").onclick = () => { st.clientId = $("#s-cid").value.trim(); localStorage.setItem(LS, JSON.stringify(state)); syncNow(); };
   $("#exp").onclick = () => download(`job-tracker-backup-${todayStr()}.json`, new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
   $("#imp").onchange = async e => {

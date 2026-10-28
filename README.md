@@ -63,3 +63,9 @@ Each day shows the house photo of every job worked, with a pay light on it: 🔴
 
 ## Payments (who paid, when, and which jobs it covered)
 On the **Pay** tab tap **💵 I got paid**. Type the amount, check the date and who paid (Ignacio is filled in), and the app lists the jobs it covers, **oldest unpaid job first**. Change any amount if you want, then save. Every payment is kept with its date, payer and note, and shows which jobs it was applied to. Money that doesn't cover a job stays as "not applied yet" until you tap **Apply to jobs**. A job's Pay page lists the payments that went toward it. Deleting a payment makes those jobs owe again. Payments are in the Ledger (Payments view + CSV), the boss report, and sync to the Google Sheet (Payments and Applied tabs). Older amounts typed before this feature show as "Earlier payments".
+
+## Keeping your boss up to date
+- After you save a payment the app offers **Send confirmation**. It writes a plain message: how much you received and when, which jobs it went to (with dates and days worked), what's still owed on each job, and the total still owed.
+- Any payment in the **Payments received** list has a 📤 button to send its confirmation later.
+- **📤 Send an update** on the Pay tab sends every job with earned, paid and owed, plus recent payments.
+- You can edit the message before sending, then choose **💬 Text**, **✉️ Email**, **📤 Other app** (WhatsApp etc.) or **📋 Copy**. Save his phone and email once in Settings (or in the send box) and they're remembered.
