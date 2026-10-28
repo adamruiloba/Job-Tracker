@@ -141,6 +141,9 @@
   .cal-cell.today .dn { background:var(--brand); color:#fff; }
   .mosaic { display:grid; grid-template-columns:1fr 1fr; gap:2px; }
   .mt { display:block; aspect-ratio:1; border-radius:5px; background-color:hsl(var(--h) 60% 55%); background-size:cover; background-position:center; font-style:normal; font-size:10px; font-weight:800; color:#fff; text-align:center; line-height:1; display:flex; align-items:center; justify-content:center; }
+  .chip.pay-none { background:#fde2e1; color:#a1241f; } .chip.pay-part { background:#fdf0cc; color:#7a5700; } .chip.pay-full { background:#dff3e3; color:#1f6b33; }
+  .mt { position:relative; }
+  .mt .pb { position:absolute; right:-1px; bottom:-2px; font-size:10px; line-height:1; font-style:normal; }
   .mt.more { background:var(--ink); color:var(--card); }
   .dcard { display:flex; gap:12px; align-items:center; padding:12px; }
   .dcard .thumb { flex:0 0 auto; }
@@ -399,6 +402,10 @@ const dayCls = v => v.dayType === "half" ? "half" : v.dayType === "custom" ? "cu
 const jobTotal = s => s.payMode === "flat" ? Number(s.pay) || 0 : entriesOf(s).reduce((a, v) => a + dayRate(v), 0);
 const paidOf = s => Number(s.paidAmount) || 0;
 const owedOf = s => Math.max(0, jobTotal(s) - paidOf(s));
+/* paid status of a job: 🔴 not paid, 🟡 part paid, 🟢 paid in full ("" when there is nothing to pay yet) */
+const payState = s => { const t = jobTotal(s), p = paidOf(s); return t <= 0 ? "" : p <= 0 ? "none" : p < t ? "part" : "full"; };
+const PAYICON = { none: "🔴", part: "🟡", full: "🟢" }, PAYWORD = { none: "Not paid", part: "Partly paid", full: "Paid" };
+const payBadge = s => { const k = payState(s); return k ? `<span class="chip pay-${k}">${PAYICON[k]} ${PAYWORD[k]}</span>` : ""; };
 const payStatus = s => { const t = jobTotal(s), p = paidOf(s); return !t ? "nopay" : p >= t ? "paid" : p > 0 ? "part" : "unpaid"; };
 const statusLabel = { paid: "Paid", part: "Partly paid", unpaid: "Unpaid", nopay: "No pay set" };
 const mapsUrl = s => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}`;
@@ -510,7 +517,7 @@ function render() {
   clearInterval(timerHandle);
   if (openJob && redirects[openJob]) openJob = redirects[openJob];
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-  $("#title").textContent = tab === "jobs" ? (openJob ? (openPaint ? "Paint" : openArea ? "Area" : openEntry ? "Day" : "Job") : "Jobs") : TITLES[tab];
+  $("#title").textContent = tab === "jobs" ? (openJob ? (openPaint ? "Paint" : openArea ? "Area" : openEntry ? "Day" : jobTab ? "Job" : "Front page") : "Jobs") : TITLES[tab];
   const app = $("#app");
   if (tab === "clock") viewClock(app);
   else if (tab === "calendar") viewCalendar(app);
@@ -598,7 +605,7 @@ function viewClock(app) {
   }
   app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = e => { if (!e.target.closest("button")) goJob(c.dataset.jobOpen); });
   app.querySelectorAll("[data-clockin]").forEach(b => b.onclick = () => startEntry(jobById(b.dataset.clockin)));
-  app.querySelectorAll("[data-day]").forEach(c => c.onclick = () => goJob(c.dataset.day, "days"));
+  app.querySelectorAll("[data-day]").forEach(c => c.onclick = () => goJob(c.dataset.day));
 }
 function switchPanel(box, a) {
   const others = recentJobs().filter(s => s.id !== a.siteId);
@@ -636,7 +643,7 @@ function dayCard(v, withTags) {
   return `<div class="card tap dcard" data-day="${job.id}">${thumb(job, "sm")}<div class="grow">
     <div class="street">${esc(streetOf(job.address))}</div>
     <div class="muted">${fmtTime(v.start)}${v.end ? " – " + fmtTime(v.end) + " · " + fmtHrs(hoursOf(v)) : " – now"}</div>
-    <div class="jc-meta"><span class="chip ${dayCls(v)}">${dayLabel(v)}${dayRate(v) ? " · " + money(dayRate(v)) : ""}</span>${tags}${crewIds(v).length ? `<span class="avatars">${crewNames(v).map(n => avatar(n)).join("")}</span>` : ""}</div></div></div>`;
+    <div class="jc-meta"><span class="chip ${dayCls(v)}">${dayLabel(v)}${dayRate(v) ? " · " + money(dayRate(v)) : ""}</span>${payBadge(job)}${tags}${crewIds(v).length ? `<span class="avatars">${crewNames(v).map(n => avatar(n)).join("")}</span>` : ""}</div></div></div>`;
 }
 
 /* ---------- Calendar tab ---------- */
@@ -644,6 +651,7 @@ function jobsOn(date) {
   const m = new Map(); for (const v of entries()) if (dayOf(v.start) === date && jobById(v.siteId)) (m.get(v.siteId) || m.set(v.siteId, []).get(v.siteId)).push(v);
   return [...m.entries()].sort((a, b) => a[1][0].start.localeCompare(b[1][0].start)).map(([id, es]) => ({ job: jobById(id), es }));
 }
+let lastTap = { d: "", t: 0 };
 function viewCalendar(app) {
   const [Y, M] = calMonth.split("-").map(Number), first = new Date(Y, M - 1, 1), lead = first.getDay(), nd = new Date(Y, M, 0).getDate();
   const ws = addDays(calSel, -D(calSel).getDay()), today = todayStr();
@@ -654,11 +662,11 @@ function viewCalendar(app) {
     const cells = Array(lead).fill(`<div class="cal-cell blank"></div>`);
     for (let d = 1; d <= nd; d++) {
       const date = `${calMonth}-${String(d).padStart(2, "0")}`, js = jobsOn(date), more = js.length - 4;
-      cells.push(`<button class="cal-cell ${date === calSel ? "sel" : ""} ${date === today ? "today" : ""}" data-d="${date}"><span class="dn">${d}</span>${js.length ? `<span class="mosaic">${js.slice(0, 4).map(({ job }, i) => i === 3 && more > 0 ? `<i class="mt more">+${more + 1}</i>` : `<i class="mt" data-thumb="${job.id}" style="--h:${hue(job.address)}"></i>`).join("")}</span>` : ""}</button>`);
+      cells.push(`<button class="cal-cell ${date === calSel ? "sel" : ""} ${date === today ? "today" : ""}" data-d="${date}"><span class="dn">${d}</span>${js.length ? `<span class="mosaic">${js.slice(0, 4).map(({ job }, i) => i === 3 && more > 0 ? `<i class="mt more">+${more + 1}</i>` : `<i class="mt" data-thumb="${job.id}" style="--h:${hue(job.address)}">${payState(job) ? `<b class="pb">${PAYICON[payState(job)]}</b>` : ""}</i>`).join("")}</span>` : ""}</button>`);
     }
     body = `<div class="dow">${["S", "M", "T", "W", "T", "F", "S"].map(x => `<div>${x}</div>`).join("")}</div><div class="cal">${cells.join("")}</div>
       <div class="muted" style="text-align:center;margin:10px 0 2px">${monthDays} day${monthDays === 1 ? "" : "s"} worked · ${monthJobs} job${monthJobs === 1 ? "" : "s"} this month</div>
-      <h2>${fmtDay(calSel)}</h2>${agenda(calSel)}`;
+      <h2>${fmtDay(calSel)}</h2>${jobsOn(calSel).length ? `<div class="muted" style="margin:-6px 4px 8px">Tap a job to open its front page · double-tap a day to jump straight in</div>` : ""}${agenda(calSel)}`;
   } else {
     body = Array.from({ length: 7 }, (_, i) => { const date = addDays(ws, i); return `<div class="wrow ${date === today ? "today" : ""}"><div class="wd"><div class="w1">${D(date).toLocaleDateString(undefined, { weekday: "short" })}</div><div class="w2">${D(date).getDate()}</div></div><div class="grow">${jobsOn(date).length ? agenda(date, true) : `<div class="wempty">No work</div>`}</div></div>`; }).join("");
   }
@@ -670,8 +678,12 @@ function viewCalendar(app) {
   $("#prev").onclick = () => shift(-1); $("#next").onclick = () => shift(1);
   $("#todaybtn").onclick = () => { calSel = today; calMonth = today.slice(0, 7); render(); };
   app.querySelectorAll("[data-cv]").forEach(b => b.onclick = () => { calView = b.dataset.cv; render(); });
-  app.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { calSel = b.dataset.d; render(); });
-  app.querySelectorAll("[data-day]").forEach(c => c.onclick = () => goJob(c.dataset.day, "days"));
+  app.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+    const d = b.dataset.d, now = Date.now(), js = jobsOn(d);
+    if (lastTap.d === d && now - lastTap.t < 450 && js.length === 1) return goJob(js[0].job.id); // double-tap a day → that job's front page
+    lastTap = { d, t: now }; calSel = d; render();
+  });
+  app.querySelectorAll("[data-day]").forEach(c => c.onclick = () => goJob(c.dataset.day));
   const add = $("#cal-add"); if (add) add.onclick = () => chooseJobUI($("#cal-choose"), job => { const v = newDay(job, calSel, calSel + "T08:00", calSel + "T16:00"); state.visits.push(v); save(); tab = "jobs"; openJob = job.id; openEntry = v.id; render(); });
 }
 function agenda(date, compact) {

@@ -57,3 +57,6 @@ The app only has the `drive.file` permission, so it can only see files it create
 - It finds the sticker in the photo, then reads it several ways and compares, because numbers like 5 and 6 can be confused. If the reads disagree, you get the other choice to tap.
 - Best results: lay the lid flat, hold the phone straight above the sticker, fill the picture with the sticker, and avoid glare. If it can't find a paint code, it says so, and you can type the details.
 - It is built around Sherwin-Williams stickers, and also recognizes Behr and Benjamin Moore codes. It's always worth a quick look at the green boxes before you save.
+
+## Calendar
+Each day shows the house photo of every job worked, with a pay light on it: 🔴 not paid, 🟡 partly paid, 🟢 paid in full. Tap a day to list its jobs, then tap a job to open its **front page** (the main page with Days, Photos, Paints, Notes and Pay). **Double-tap a day** to jump straight to that job's front page when only one job was worked that day.
