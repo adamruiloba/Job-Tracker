@@ -254,8 +254,8 @@ const avatar = (n, big) => `<span class="av${big ? " big" : ""}" style="backgrou
    people   = your employees: {id,name}
    tasks    = optional "what this person did" note for one day: {id: visitId:personId, visitId,siteId,personId,text} */
 const LS = "painterJobs.v2";
-const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks", "paints"];
-let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], settings: { clientId: "", sheetId: "", fullRate: 150, halfRate: 75, ratesInit: false, myName: "", bossName: "Ignacio" } };
+const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks", "paints", "areas"];
+let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], areas: [], settings: { clientId: "", sheetId: "", fullRate: 150, halfRate: 75, ratesInit: false, myName: "", bossName: "Ignacio" } };
 function load() {
   const def = state.settings;
   try { const s = JSON.parse(localStorage.getItem(LS)); if (s) state = { ...state, ...s, settings: { ...def, ...s.settings } }; } catch {}
@@ -299,7 +299,7 @@ function resizeImage(file, max=1600) {
 let redirects = {};
 function absorb(keep, dup) {
   state.visits.forEach(v => { if (v.siteId === dup.id) { v.siteId = keep.id; touch(v); } });
-  for (const k of ["photos", "notes", "contacts", "tasks", "paints"]) state[k].forEach(o => { if (o.siteId === dup.id) { o.siteId = keep.id; touch(o); } });
+  for (const k of ["photos", "notes", "contacts", "tasks", "paints", "areas"]) state[k].forEach(o => { if (o.siteId === dup.id) { o.siteId = keep.id; touch(o); } });
   if (!(Number(keep.pay) > 0) && Number(dup.pay) > 0) { keep.pay = dup.pay; if (!entriesOf(keep).some(v => Number(v.rate) > 0)) keep.payMode = "flat"; }
   keep.paidAmount = (Number(keep.paidAmount) || 0) + (Number(dup.paidAmount) || 0) || "";
   if (dup.paidDate && (!keep.paidDate || dup.paidDate > keep.paidDate)) keep.paidDate = dup.paidDate;
@@ -358,6 +358,30 @@ const paintsOf = s => state.paints.filter(o => live(o) && o.siteId === s.id).sor
 const areasOf = p => String(p.areas || "").split("|").map(x => x.trim()).filter(Boolean);
 const paintName = p => [p.brand, p.product].filter(Boolean).join(" ") || "Paint";
 const paintColor = p => [p.colorCode, p.colorName].filter(Boolean).join(" · ");
+/* areas: the parts of a house that were painted (stucco, fascia, front door…). A paint says where it was used; a photo can say which area it shows. */
+const sameName = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+const areaRecs = s => state.areas.filter(a => live(a) && a.siteId === s.id).sort((a, b) => a.id.localeCompare(b.id));
+function areaNamesOf(s) { const out = [], add = n => { n = String(n || "").trim(); if (n && !out.some(x => sameName(x, n))) out.push(n); }; areaRecs(s).forEach(a => add(a.name)); paintsOf(s).forEach(p => areasOf(p).forEach(add)); photosOf(s).forEach(p => add(p.area)); return out; }
+const paintsInArea = (s, name) => paintsOf(s).filter(p => areasOf(p).some(a => sameName(a, name)));
+const photosInArea = (s, name) => photosOf(s).filter(p => p.area && sameName(p.area, name)).sort((a, b) => (a.taken || "").localeCompare(b.taken || "") || a.id.localeCompare(b.id));
+function addArea(s, name) { name = String(name || "").trim(); if (!name) return ""; const ex = areaNamesOf(s).find(x => sameName(x, name)); if (ex) return ex; state.areas.push(touch({ id: uid(), siteId: s.id, name, deleted: false })); return name; }
+function assignPaint(p, name, on) { const rest = areasOf(p).filter(a => !sameName(a, name)); p.areas = (on ? [...rest, name] : rest).join(" | "); touch(p); }
+function renameArea(s, from, to) {
+  to = String(to || "").trim(); if (!to || to === from) return from;
+  const target = areaNamesOf(s).find(x => sameName(x, to) && !sameName(x, from)) || to;
+  areaRecs(s).filter(a => sameName(a.name, from)).forEach(a => { a.name = target; touch(a); });
+  paintsOf(s).forEach(p => { if (areasOf(p).some(a => sameName(a, from))) { p.areas = [...new Set(areasOf(p).map(a => sameName(a, from) ? target : a))].join(" | "); touch(p); } });
+  photosOf(s).forEach(p => { if (p.area && sameName(p.area, from)) { p.area = target; touch(p); } });
+  if (!areaRecs(s).some(a => sameName(a.name, target))) state.areas.push(touch({ id: uid(), siteId: s.id, name: target, deleted: false }));
+  return target;
+}
+function deleteArea(s, name) {
+  areaRecs(s).filter(a => sameName(a.name, name)).forEach(a => touch(Object.assign(a, { deleted: true })));
+  paintsOf(s).forEach(p => { if (areasOf(p).some(a => sameName(a, name))) { p.areas = areasOf(p).filter(a => !sameName(a, name)).join(" | "); touch(p); } });
+  photosOf(s).forEach(p => { if (p.area && sameName(p.area, name)) { p.area = ""; touch(p); } });
+}
+const areaOptions = (s, cur) => `<option value="">— none —</option>${areaNamesOf(s).map(n => `<option value="${esc(n)}" ${sameName(n, cur) ? "selected" : ""}>${esc(n)}</option>`).join("")}<option value="__new">＋ A new part…</option>`;
+function chooseAreaValue(s, v) { if (v !== "__new") return v; const n = (prompt("Which part of the house? (e.g. Front door, Fascia / eaves, Stucco)") || "").trim(); return n ? addArea(s, n) : ""; }
 const notesOf = s => state.notes.filter(n => live(n) && n.siteId === s.id).sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
 const contactsOf = s => state.contacts.filter(c => live(c) && c.siteId === s.id);
 const people = () => state.people.filter(live).sort((a, b) => a.name.localeCompare(b.name));
@@ -444,7 +468,7 @@ const thumb = (s, cls = "") => `<div class="thumb ${cls}" data-thumb="${s.id}" s
 /* ---------- search: name, phone, address, notes, crew... ---------- */
 function searchMatch(s, q) {
   const es = entriesOf(s), contacts = contactsOf(s);
-  const parts = [s.address, ownerName(s), s.ownerPhone, s.ownerInfo, s.paint, s.work, ...contacts.flatMap(c => [c.name, c.role, c.phone]), ...paintsOf(s).flatMap(x => [x.brand, x.product, x.type, x.colorName, x.colorCode, x.sheen, x.base, x.orderNo, x.store, x.productCode, x.areas, x.notes]), ...notesOf(s).map(n => n.text), ...es.flatMap(v => [v.notes, ...crewNames(v), ...tasksOf(v).map(t => t.text)])];
+  const parts = [s.address, ownerName(s), s.ownerPhone, s.ownerInfo, s.paint, s.work, ...contacts.flatMap(c => [c.name, c.role, c.phone]), ...areaNamesOf(s), ...paintsOf(s).flatMap(x => [x.brand, x.product, x.type, x.colorName, x.colorCode, x.sheen, x.base, x.orderNo, x.store, x.productCode, x.areas, x.notes]), ...notesOf(s).map(n => n.text), ...es.flatMap(v => [v.notes, ...crewNames(v), ...tasksOf(v).map(t => t.text)])];
   const hay = normAddr(parts.join(" ")), phones = [s.ownerPhone, ...contacts.map(c => c.phone)].map(digits).filter(Boolean);
   const qd = digits(q);
   if (qd.length >= 3 && phones.some(p => p.includes(qd))) return true;
@@ -479,23 +503,23 @@ function setDayType(v, type, onlyIfDefault, was) {
 }
 
 /* ---------- navigation ---------- */
-let tab = "clock", openJob = null, openEntry = null, openPaint = null, jobTab = null, q = "", dateQ = "", jobFilter = "all", timerHandle = null;
+let tab = "clock", openJob = null, openEntry = null, openPaint = null, openArea = null, paintReturnArea = null, jobTab = null, q = "", dateQ = "", jobFilter = "all", timerHandle = null;
 let calMonth = todayStr().slice(0, 7), calSel = todayStr(), calView = "month";
 const TITLES = { clock: "Clock", calendar: "Calendar", pay: "Pay", settings: "Settings" };
 function render() {
   clearInterval(timerHandle);
   if (openJob && redirects[openJob]) openJob = redirects[openJob];
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-  $("#title").textContent = tab === "jobs" ? (openJob ? (openPaint ? "Paint" : openEntry ? "Day" : "Job") : "Jobs") : TITLES[tab];
+  $("#title").textContent = tab === "jobs" ? (openJob ? (openPaint ? "Paint" : openArea ? "Area" : openEntry ? "Day" : "Job") : "Jobs") : TITLES[tab];
   const app = $("#app");
   if (tab === "clock") viewClock(app);
   else if (tab === "calendar") viewCalendar(app);
-  else if (tab === "jobs") openJob ? (openPaint ? viewPaint(app) : openEntry ? viewEntry(app) : viewJob(app)) : viewJobs(app);
+  else if (tab === "jobs") openJob ? (openPaint ? viewPaint(app) : openArea ? viewArea(app) : openEntry ? viewEntry(app) : viewJob(app)) : viewJobs(app);
   else if (tab === "pay") viewPay(app);
   else viewSettings(app);
   syncLabel(); fillThumbs(app); fillPaintPhotos(app);
 }
-const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; openPaint = null; jobTab = t || null; render(); window.scrollTo(0, 0); };
+const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; openPaint = null; openArea = null; jobTab = t || null; render(); window.scrollTo(0, 0); };
 
 /* ---------- crew sheet: tick who worked, optionally say what they did ---------- */
 function openCrewSheet(v, done) {
@@ -768,7 +792,7 @@ function tabDetails(box, s) {
   $("#j-del").onclick = () => {
     if (!confirm("Delete this job and everything in it (days, notes, contacts, photo list)?")) return;
     entriesOf(s).forEach(v => touch(Object.assign(v, { deleted: true })));
-    for (const k of ["photos", "notes", "contacts", "tasks", "paints"]) state[k].filter(o => o.siteId === s.id).forEach(o => touch(Object.assign(o, { deleted: true })));
+    for (const k of ["photos", "notes", "contacts", "tasks", "paints", "areas"]) state[k].filter(o => o.siteId === s.id).forEach(o => touch(Object.assign(o, { deleted: true })));
     touch(Object.assign(s, { deleted: true })); save(); openJob = null; render();
   };
 }
@@ -788,25 +812,28 @@ function tabDays(box, s, st) {
   box.querySelectorAll("[data-entry]").forEach(c => c.onclick = () => { openEntry = c.dataset.entry; render(); });
 }
 
-let photoLabel = "during", photoFilter = "all";
+let photoLabel = "during", photoFilter = "all", photoArea = "";
 const PLABELS = [["before", "Before"], ["during", "During"], ["after", "After"], ["issue", "Issues"], ["other", "Other"]];
 const plabel = p => PLABELS.some(x => x[0] === p.label) ? p.label : "during";
 function tabPhotos(box, s) {
   const ps = photosOf(s), n = k => ps.filter(p => plabel(p) === k).length;
   if (photoFilter !== "all" && !n(photoFilter)) photoFilter = "all";
+  if (photoArea && !areaNamesOf(s).some(x => sameName(x, photoArea))) photoArea = "";
   box.innerHTML = `
     <div class="card"><h3>📷 Add photos</h3><div class="muted">Pick what they show first. They're filed under it automatically.</div>
       <div class="pills" style="margin-top:10px">${PLABELS.slice(0, 4).map(([k, l]) => `<button data-pl="${k}" class="${photoLabel === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <label style="margin:12px 0 4px">Which part of the house? (optional)</label><select id="ph-area">${areaOptions(s, photoArea)}</select>
       <div class="actions"><label style="margin:0;flex:1"><span class="btn primary block">📷 Take photo</span><input id="ph-cam" type="file" accept="image/*" capture="environment" style="display:none"></label><label style="margin:0;flex:1"><span class="btn block">🖼 Choose</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label></div></div>
     ${ps.length ? `<div class="filters"><button data-pf="all" class="${photoFilter === "all" ? "on" : ""}">All ${ps.length}</button>${PLABELS.filter(([k]) => n(k)).map(([k, l]) => `<button data-pf="${k}" class="${photoFilter === k ? "on" : ""}">${l} ${n(k)}</button>`).join("")}</div>` : `<div class="empty"><span class="big-emoji">🖼</span>No photos yet.</div>`}
     <div id="photo-groups"></div>
     <div class="muted" style="margin:8px 4px">Photos of paint buckets and labels live in the 🎨 Paints section.</div>`;
   box.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { photoLabel = b.dataset.pl; box.querySelectorAll("[data-pl]").forEach(x => x.classList.toggle("on", x === b)); });
   box.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { photoFilter = b.dataset.pf; render(); });
+  $("#ph-area").onchange = () => { photoArea = chooseAreaValue(s, $("#ph-area").value); $("#ph-area").innerHTML = areaOptions(s, photoArea); };
   const add = async e => {
     let k = 0;
     for (const f of e.target.files) {
-      try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: photoLabel, caption: "", deleted: false })); k++; }
+      try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: photoLabel, caption: "", area: photoArea, deleted: false })); k++; }
       catch { toast("Skipped a file that isn't a photo"); }
     }
     if (k) { save(); toast(`${k} photo${k > 1 ? "s" : ""} added to ${PLABELS.find(x => x[0] === photoLabel)[1]}`); } render();
@@ -822,13 +849,17 @@ async function drawPhotos(s) {
     const list = ps.filter(p => plabel(p) === k).sort((a, b) => (a.taken || "").localeCompare(b.taken || "") || a.id.localeCompare(b.id)); if (!list.length) continue;
     const sec = document.createElement("div"); sec.innerHTML = `<h2>${l} · ${list.length}</h2><div class="photos" style="margin-top:0"></div>`; root.append(sec);
     const grid = sec.querySelector(".photos");
-    for (const p of list) {
-      const d = document.createElement("div"); d.className = "ph"; grid.append(d);
-      const url = await photoUrl(p);
-      if (!url) { d.textContent = p.driveId ? "☁️ Tap Sync to load" : "Missing"; continue; }
-      d.innerHTML = `<img src="${url}" alt="Job photo"><span class="cloud">${p.driveId ? "☁️ " : ""}${fmtShort(p.taken)}</span>${cover && cover.id === p.id ? `<span class="star">★</span>` : ""}${p.caption ? `<span class="cloud" style="top:5px;bottom:auto;right:5px;left:auto">💬</span>` : ""}`;
-      d.onclick = () => openPhotoViewer(p, s, url);
-    }
+    await fillPhotoGrid(grid, list, s);
+  }
+}
+async function fillPhotoGrid(grid, list, s) {
+  const cover = coverPhoto(s);
+  for (const p of list) {
+    const d = document.createElement("div"); d.className = "ph"; grid.append(d);
+    const url = await photoUrl(p);
+    if (!url) { d.textContent = p.driveId ? "☁️ Tap Sync to load" : "Missing"; continue; }
+    d.innerHTML = `<img src="${url}" alt="Job photo"><span class="cloud">${p.driveId ? "☁️ " : ""}${fmtShort(p.taken)}</span>${cover && cover.id === p.id ? `<span class="star">★</span>` : ""}${p.caption ? `<span class="cloud" style="top:5px;bottom:auto;right:5px;left:auto">💬</span>` : ""}`;
+    d.onclick = () => openPhotoViewer(p, s, url);
   }
 }
 function openPhotoViewer(p, s, url) {
@@ -836,11 +867,13 @@ function openPhotoViewer(p, s, url) {
   bg.innerHTML = `<div class="sheet"><img id="pv-img" src="${url}" alt="" style="width:100%;max-height:46vh;object-fit:contain;background:#000;border-radius:14px">
     <div class="muted" style="margin:8px 2px">${fmtDay(p.taken)} · tap the photo for full screen</div>
     <div class="pills">${PLABELS.slice(0, 4).map(([k, l]) => `<button data-l="${k}" class="${plabel(p) === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <label style="margin:10px 0 4px">Which part of the house is this?</label><select id="pv-area">${areaOptions(s, p.area)}</select>
     <input id="pv-cap" placeholder="Caption (optional), e.g. cracked stucco by the garage" value="${esc(p.caption)}" style="margin-top:10px">
     <div class="actions"><button class="primary" id="pv-done">Done</button><button class="soft" id="pv-cover">★ Make cover</button><button class="danger" id="pv-del">Delete</button></div></div>`;
   document.body.append(bg);
   bg.querySelectorAll("[data-l]").forEach(b => b.onclick = () => { p.label = b.dataset.l; touch(p); bg.querySelectorAll("[data-l]").forEach(x => x.classList.toggle("on", x === b)); });
   $("#pv-img").onclick = () => { const m = document.createElement("div"); m.className = "modal"; m.innerHTML = `<img src="${url}" alt="">`; m.onclick = () => m.remove(); document.body.append(m); };
+  $("#pv-area").onchange = () => { p.area = chooseAreaValue(s, $("#pv-area").value); touch(p); $("#pv-area").innerHTML = areaOptions(s, p.area); };
   const close = () => { p.caption = $("#pv-cap").value.trim(); touch(p); save(); bg.remove(); render(); };
   $("#pv-done").onclick = close; bg.onclick = e => { if (e.target === bg) close(); };
   $("#pv-cover").onclick = () => { s.cover = p.id; touch(s); close(); toast("Cover photo set"); };
@@ -1034,7 +1067,7 @@ async function runOcr(p, manual) {
 }
 
 /* ---------- Paints: a ledger of what paint was used where ---------- */
-const SURFACES = ["Walls", "Ceiling", "Trim", "Doors", "Cabinets", "Exterior walls", "Fascia / eaves", "Garage", "Deck / fence"];
+const SURFACES = ["Stucco", "Siding", "Trim", "Fascia / eaves", "Soffits", "Front door", "Garage door", "Doors", "Gutters", "Shutters", "Fence", "Deck", "Walls", "Ceiling", "Cabinets"];
 const ROOMS = ["Master bedroom", "Bedroom", "Living room", "Kitchen", "Bathroom", "Laundry room", "Hallway", "Entry", "Dining room", "Office"];
 const BRANDS = ["Sherwin-Williams", "Behr", "Benjamin Moore", "Dunn-Edwards", "Kelly-Moore", "Valspar", "PPG", "Glidden", "Vista", "Frazee", "Kilz", "Zinsser"];
 const PRODUCTS = ["Duration", "SuperPaint", "ProClassic", "Emerald", "Ultra", "Marquee", "Regal Select", "Aura", "Cashmere", "Primer", "Ceiling paint"];
@@ -1044,18 +1077,63 @@ const paintCard = p => `<div class="card tap" data-paint="${p.id}"><div class="r
   <div class="grow"><div class="street">${esc(paintName(p))}</div><div>${paintColor(p) ? esc(paintColor(p)) : `<span class="muted">No color yet</span>`}</div>
     <div class="muted">${[p.sheen, p.type, p.base].filter(Boolean).map(esc).join(" · ")}</div>
     ${areasOf(p).length ? `<div class="jc-meta">${areasOf(p).map(a => `<span class="chip full">${esc(a)}</span>`).join("")}</div>` : ""}</div></div></div>`;
+const areaCard = (s, n, i) => { const pp = paintsInArea(s, n), ph = photosInArea(s, n);
+  return `<div class="card tap row" data-ai="${i}" style="gap:12px;padding:12px"><div class="thumb sm" data-pphoto="${ph[0] ? ph[0].id : ""}" style="--h:${hue(n)}"><span>📍</span></div><div class="grow"><div class="street">${esc(n)}</div>
+    <div class="muted">${pp.length ? pp.slice(0, 2).map(p => esc(paintColor(p) || paintName(p))).join(" · ") + (pp.length > 2 ? ` +${pp.length - 2}` : "") : "No paint yet"}</div><div class="muted">📷 ${ph.length} photo${ph.length === 1 ? "" : "s"}</div></div><span style="font-size:22px;color:var(--muted)">›</span></div>`; };
 function tabPaints(box, s) {
-  const ps = paintsOf(s), byArea = new Map();
-  ps.forEach(p => { const as = areasOf(p); (as.length ? as : ["Not assigned yet"]).forEach(a => (byArea.get(a) || byArea.set(a, []).get(a)).push(p)); });
+  const ps = paintsOf(s), names = areaNamesOf(s);
   box.innerHTML = `
-    <div class="row" style="margin:0 4px 10px"><h2 style="margin:0">Paints used</h2><button class="small primary" id="pt-add">＋ Add paint</button></div>
-    ${ps.length ? ps.map(paintCard).join("") : `<div class="empty"><span class="big-emoji">🎨</span>No paints yet.<br>Tap “Add paint”, take a photo of the bucket and the color label, and the app reads it.</div>`}
-    ${byArea.size ? `<div class="card"><h3>📋 What was used where</h3>${[...byArea.entries()].map(([a, list]) => `<div class="line" style="align-items:flex-start"><strong>${esc(a)}</strong><span style="text-align:right">${list.map(p => `<div>${esc(paintColor(p) || paintName(p))}${p.sheen ? ` <span class="muted">${esc(p.sheen)}</span>` : ""}</div>`).join("")}</span></div>`).join("")}</div>` : ""}
+    <div class="row" style="margin:0 4px 10px"><h2 style="margin:0">Where it was used</h2><button class="small primary" id="ar-add">＋ Add area</button></div>
+    <div id="ar-addbox"></div>
+    ${names.length ? names.map((n, i) => areaCard(s, n, i)).join("") : `<div class="empty" style="padding:22px"><span class="big-emoji">📍</span>No areas yet.<br>Add each part you painted (stucco, fascia, front door…), then give it its paint and photos.</div>`}
+    <div class="row" style="margin:20px 4px 10px"><h2 style="margin:0">Paints on this job</h2><button class="small primary" id="pt-add">＋ Add paint</button></div>
+    ${ps.length ? ps.map(paintCard).join("") : `<div class="empty" style="padding:22px"><span class="big-emoji">🎨</span>No paints yet.<br>Tap “Add paint”, take a photo of the bucket and the color label, and the app reads it.</div>`}
     <div class="card"><h3>📝 Other paint notes</h3><textarea id="j-paint" style="min-height:70px" placeholder="Anything else: primer, caulk, tape, how much was left over…">${esc(s.paint)}</textarea>
       <div class="actions"><button class="primary small" id="pt-notes">Save</button></div></div>`;
-  $("#pt-add").onclick = () => { const p = touch({ id: uid(), siteId: s.id, brand: "", product: "", type: "", colorCode: "", colorName: "", sheen: "", base: "", orderNo: "", mixedDate: "", store: "", storePhone: "", productCode: "", formula: "", size: "", areas: "", photoFront: "", photoTop: "", notes: "", labelText: "", deleted: false }); state.paints.push(p); save(); openPaint = p.id; render(); window.scrollTo(0, 0); };
+  $("#ar-add").onclick = () => {
+    const have = names, sug = [...SURFACES, ...ROOMS].filter(x => !have.some(h => sameName(h, x)));
+    $("#ar-addbox").innerHTML = `<div class="card"><h3>＋ Add an area</h3><div class="muted">What part of the house did you paint?</div>
+      <div class="row" style="margin-top:10px"><input id="ar-new" placeholder="Type one, e.g. Garage door" autocapitalize="words" autocomplete="off"><button class="soft" id="ar-new-go">Add</button></div>
+      <div class="quick" style="margin-top:10px">${sug.map(a => `<button data-sg="${esc(a)}">＋ ${esc(a)}</button>`).join("")}</div><div class="actions"><button id="ar-x">Cancel</button></div></div>`;
+    const go = name => { const n = addArea(s, name); if (!n) return toast("Type a name"); save(); openArea = n; render(); window.scrollTo(0, 0); };
+    $("#ar-new-go").onclick = () => go($("#ar-new").value); $("#ar-new").onkeydown = e => { if (e.key === "Enter") go($("#ar-new").value); };
+    $("#ar-addbox").querySelectorAll("[data-sg]").forEach(b => b.onclick = () => go(b.dataset.sg)); $("#ar-x").onclick = () => { $("#ar-addbox").innerHTML = ""; }; $("#ar-new").focus();
+  };
+  box.querySelectorAll("[data-ai]").forEach(c => c.onclick = () => { openArea = names[+c.dataset.ai]; render(); window.scrollTo(0, 0); });
+  $("#pt-add").onclick = () => { const p = newPaint(s, ""); openPaint = p.id; render(); window.scrollTo(0, 0); };
   box.querySelectorAll("[data-paint]").forEach(c => c.onclick = () => { openPaint = c.dataset.paint; render(); window.scrollTo(0, 0); });
   $("#pt-notes").onclick = () => { s.paint = $("#j-paint").value; touch(s); save(); toast("Saved"); };
+}
+function newPaint(s, area) { const p = touch({ id: uid(), siteId: s.id, brand: "", product: "", type: "", colorCode: "", colorName: "", sheen: "", base: "", orderNo: "", mixedDate: "", store: "", storePhone: "", productCode: "", formula: "", size: "", areas: area || "", photoFront: "", photoTop: "", notes: "", labelText: "", deleted: false }); state.paints.push(p); save(); return p; }
+/* one area: the paint used there and its photos */
+function viewArea(app) {
+  const s = jobById(openJob), name = openArea;
+  if (!s || !name) { openArea = null; return render(); }
+  const ps = paintsInArea(s, name), others = paintsOf(s).filter(p => !ps.includes(p)), photos = photosInArea(s, name);
+  app.innerHTML = `
+    <button class="small" id="back">← Paints · ${esc(streetOf(s.address))}</button>
+    <div class="row" style="margin:14px 4px 4px"><div style="font-size:24px;font-weight:800;letter-spacing:-.3px">📍 ${esc(name)}</div><span class="row" style="gap:6px"><button class="small soft" id="ar-ren">Rename</button><button class="small danger" id="ar-del">Delete</button></span></div>
+    <div class="card" style="margin-top:12px"><h3>🎨 Paint used here</h3>
+      ${ps.length ? ps.map(p => `<div class="line"><div class="row grow tap" data-paint="${p.id}" style="justify-content:flex-start;gap:12px"><div class="thumb sm" data-pphoto="${p.photoFront || p.photoTop || ""}" style="--h:${hue(p.brand || "paint")}"><span>🎨</span></div><div class="grow"><div class="street">${esc(paintName(p))}</div><div>${esc(paintColor(p) || "No color yet")}</div><div class="muted">${[p.sheen, p.type, p.base].filter(Boolean).map(esc).join(" · ")}</div></div></div><button class="small danger" data-unassign="${p.id}" aria-label="Remove from this area">✕</button></div>`).join("") : `<div class="muted" style="padding:6px 0">No paint added to this area yet.</div>`}
+      <select id="ar-addpaint" style="margin-top:10px"><option value="">＋ Add a paint to this area…</option>${others.map(p => `<option value="${p.id}">${esc(paintName(p))}${paintColor(p) ? " — " + esc(paintColor(p)) : ""}</option>`).join("")}<option value="__new">＋ A new paint…</option></select></div>
+    <div class="card"><h3>📷 Photos of this area</h3>
+      <div class="pills">${PLABELS.slice(0, 4).map(([k, l]) => `<button data-pl="${k}" class="${photoLabel === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="actions"><label style="margin:0;flex:1"><span class="btn primary block">📷 Take photo</span><input id="ar-cam" type="file" accept="image/*" capture="environment" style="display:none"></label><label style="margin:0;flex:1"><span class="btn block">🖼 Choose</span><input id="ar-in" type="file" accept="image/*" multiple style="display:none"></label></div>
+      <div class="photos" id="ar-photos"></div>${photos.length ? "" : `<div class="empty" style="padding:20px"><span class="big-emoji">🖼</span>No photos of this area yet.</div>`}</div>`;
+  $("#back").onclick = () => { openArea = null; render(); window.scrollTo(0, 0); };
+  $("#ar-ren").onclick = () => { const n = (prompt("Rename this part:", name) || "").trim(); if (n && n !== name) { openArea = renameArea(s, name, n); save(); toast("Renamed"); render(); } };
+  $("#ar-del").onclick = () => { if (!confirm(`Delete "${name}"?\n\nIts photos stay in the job's gallery and its paints stay on the job.`)) return; deleteArea(s, name); save(); openArea = null; render(); };
+  app.querySelectorAll("[data-paint]").forEach(c => c.onclick = () => { paintReturnArea = name; openPaint = c.dataset.paint; openArea = null; render(); window.scrollTo(0, 0); });
+  app.querySelectorAll("[data-unassign]").forEach(b => b.onclick = () => { assignPaint(state.paints.find(x => x.id === b.dataset.unassign), name, false); save(); render(); });
+  $("#ar-addpaint").onchange = e => { const v = e.target.value; if (!v) return; if (v === "__new") { const p = newPaint(s, name); paintReturnArea = name; openPaint = p.id; openArea = null; render(); window.scrollTo(0, 0); } else { assignPaint(state.paints.find(x => x.id === v), name, true); save(); render(); } };
+  app.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { photoLabel = b.dataset.pl; app.querySelectorAll("[data-pl]").forEach(x => x.classList.toggle("on", x === b)); });
+  const add = async e => {
+    let k = 0;
+    for (const f of e.target.files) { try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: photoLabel, caption: "", area: name, deleted: false })); k++; } catch { toast("Skipped a file that isn't a photo"); } }
+    if (k) { save(); toast(`${k} photo${k > 1 ? "s" : ""} added to ${name}`); } render();
+  };
+  $("#ar-cam").onchange = add; $("#ar-in").onchange = add;
+  fillPhotoGrid($("#ar-photos"), photos, s);
 }
 function viewPaint(app) {
   const p = state.paints.find(x => x.id === openPaint && live(x)), s = p && jobById(p.siteId);
@@ -1099,10 +1177,10 @@ function viewPaint(app) {
   for (const [k, list] of Object.entries(ocrAlts)) { const el = $(OCR_FIELDS[k]); if (!el) continue; const rest = list.filter(v => v !== el.value); if (rest.length) el.insertAdjacentHTML("afterend", `<div class="alts">Also read: ${rest.map(v => `<button class="chip altbtn" data-alt="${k}" data-v="${esc(v)}">${esc(v)}</button>`).join(" ")}</div>`); }
   app.querySelectorAll("[data-alt]").forEach(b => b.onclick = () => { const el = $(OCR_FIELDS[b.dataset.alt]); el.value = b.dataset.v; mark(el); b.closest(".alts").remove(); });
   const isEmpty = () => !(p.brand || p.product || p.colorCode || p.colorName || p.sheen || p.type || p.base || p.orderNo || p.store || p.productCode || p.size || p.notes || p.areas || p.photoFront || p.photoTop);
-  const leave = () => { openPaint = null; jobTab = "paints"; paintHooks = null; ocrFilled = []; ocrAlts = {}; };
+  const leave = () => { openPaint = null; jobTab = "paints"; paintHooks = null; ocrFilled = []; ocrAlts = {}; openArea = paintReturnArea; paintReturnArea = null; };
   const close = () => { readForm(); if (isEmpty()) p.deleted = true; save(); leave(); render(); };
   const drawAreas = () => {
-    const recent = uniq("areas").flatMap(x => x.split("|").map(y => y.trim())).filter(Boolean), sug = [...new Set([...recent, ...SURFACES, ...ROOMS])].filter(a => !areas.includes(a));
+    const recent = uniq("areas").flatMap(x => x.split("|").map(y => y.trim())).filter(Boolean), sug = [...new Set([...areaNamesOf(s), ...recent, ...SURFACES, ...ROOMS])].filter(a => !areas.includes(a));
     $("#pf-areas").innerHTML = `<div class="crewchips" style="margin-top:10px">${areas.map(a => `<button class="on" data-ar="${esc(a)}">${esc(a)} ✕</button>`).join("") || `<span class="muted">Nothing chosen yet</span>`}</div>
       <div class="row" style="margin-top:10px"><input id="pf-newarea" placeholder="Type your own, e.g. Guest bath" autocapitalize="words" autocomplete="off"><button class="soft" id="pf-addarea">Add</button></div>
       <div class="quick" style="margin-top:10px">${sug.map(a => `<button data-sg="${esc(a)}">＋ ${esc(a)}</button>`).join("")}</div>`;
@@ -1269,15 +1347,16 @@ const SHEET_NAME = "Painter Job Tracker";
 const COLS = {
   Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "lat", "lng", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
-  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "updated", "deleted"],
+  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "updated", "deleted"],
+  Areas: ["id", "siteId", "address", "name", "updated", "deleted"],
   Paints: ["id", "siteId", "address", "brand", "product", "type", "colorCode", "colorName", "sheen", "base", "orderNo", "mixedDate", "store", "storePhone", "productCode", "formula", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
   Contacts: ["id", "siteId", "address", "name", "role", "phone", "updated", "deleted"],
   People: ["id", "name", "updated", "deleted"],
   CrewNotes: ["id", "visitId", "siteId", "address", "personId", "personName", "text", "updated", "deleted"],
 };
-const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints" };
-const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"] };
+const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints", Areas: "areas" };
+const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"], Areas: ["address"] };
 const NUM = new Set(["lat", "lng", "pay", "paidAmount", "lastPay", "rate", "updated"]);
 function merge(local, remote) {
   const m = new Map(local.map(x => [x.id, x]));
@@ -1361,7 +1440,7 @@ async function syncNow(quiet) {
 
 /* ---------- boot ---------- */
 $("#syncbtn").onclick = () => syncNow();
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.tab; if (tab === "jobs") { openJob = null; openEntry = null; openPaint = null; } render(); window.scrollTo(0, 0); });
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.tab; if (tab === "jobs") { openJob = null; openEntry = null; openPaint = null; openArea = null; } render(); window.scrollTo(0, 0); });
 load(); render();
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 </script>
