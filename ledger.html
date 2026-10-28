@@ -72,7 +72,7 @@
   </div>
 
   <div class="summary" id="summary"></div>
-  <div class="tabs"><button data-v="job">By job</button><button data-v="day">By day</button><button data-v="grid">Grid</button><button data-v="paint">Paints</button></div>
+  <div class="tabs"><button data-v="job">By job</button><button data-v="day">By day</button><button data-v="grid">Grid</button><button data-v="paint">Paints</button><button data-v="pay">Payments</button></div>
   <div id="view"></div>
 </div>
 
@@ -85,6 +85,9 @@ try { const s = JSON.parse(localStorage.getItem("painterJobs.v2")); if (s) state
 const peopleById = Object.fromEntries((state.people || []).map(p => [p.id, p.name]));
 const crewOf = v => String(v.crew || "").split(",").filter(id => peopleById[id]).map(id => peopleById[id]);
 const live = o => !o.deleted;
+const payLive = (state.payments || []).filter(live), payById = Object.fromEntries(payLive.map(p => [p.id, p]));
+const appliedLive = (state.applied || []).filter(a => live(a) && payById[a.paymentId]);
+const paidOf = s => (Number(s.paidAmount) || 0) + appliedLive.filter(a => a.siteId === s.id).reduce((t, a) => t + num(a.amount), 0);
 const jobs = (state.sites || []).filter(live);
 const jobById = Object.fromEntries(jobs.map(s => [s.id, s]));
 const dayOf = s => (s || "").slice(0, 10);
@@ -125,13 +128,13 @@ function jobRows() {
 function draw() {
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
   const js = jobRows(), dayEs = entries.filter(v => inRange(dayOf(v.start)));
-  const pay = js.reduce((t, a) => t + a.total, 0), got = js.reduce((t, a) => t + num(a.s.paidAmount), 0);
+  const pay = js.reduce((t, a) => t + a.total, 0), got = js.reduce((t, a) => t + paidOf(a.s), 0);
   const jh = js.filter(a => a.total > 0).reduce((t, a) => t + a.hours, 0);
   $("#summary").innerHTML = [
     ["Jobs", js.length], ["Days worked", new Set(dayEs.map(v => dayOf(v.start))).size], ["Hours", h2(dayEs.reduce((t, v) => t + hrs(v), 0))],
     ["Job pay", m2(pay)], ["Received", m2(got)], ["Balance due", m2(pay - got)], ["Pay per hour", jh ? m2(js.filter(a => a.total > 0).reduce((t, a) => t + a.total, 0) / jh) : "—"],
   ].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
-  $("#view").innerHTML = ""; $("#view").append(view === "job" ? viewJob(js) : view === "day" ? viewDay(dayEs) : view === "paint" ? viewPaints(js) : viewGrid());
+  $("#view").innerHTML = ""; $("#view").append(view === "job" ? viewJob(js) : view === "day" ? viewDay(dayEs) : view === "paint" ? viewPaints(js) : view === "pay" ? viewPayments() : viewGrid());
 }
 
 function table(head, rows, opts = {}) {
@@ -144,13 +147,13 @@ function table(head, rows, opts = {}) {
 /* BY JOB */
 function viewJob(js) {
   const rows = js.map(a => {
-    const s = a.s, p = a.total, g = num(s.paidAmount), bal = p - g;
+    const s = a.s, p = a.total, g = paidOf(s), bal = p - g;
     lastCsvRows.push([s.address, s.done ? "Finished" : "Open", a.first, a.last, a.days.size, h2(a.hours), p || "", g || "", p ? bal : "", p && a.hours ? (p / a.hours).toFixed(2) : ""]);
     const when = a.es.length ? `${fmtShort(a.first)}${a.first !== a.last ? "–" + fmtShort(a.last) : ""} · ` : "";
     return `<tr><td class="job first">${esc(s.address)}${s.ownerFirst || s.ownerLast ? `<div class="muted" style="font-size:12px">👤 ${esc([s.ownerFirst, s.ownerLast].filter(Boolean).join(" "))}${s.ownerPhone ? " · " + esc(s.ownerPhone) : ""}</div>` : ""}<div class="muted" style="font-size:12px">${a.es.length ? a.days.size + (a.days.size === 1 ? " day · " : " days · ") : ""}${when}${s.done ? "Finished" : "Open"}</div>${s.work || s.paint ? `<div class="muted hm" style="font-size:12px">${esc((s.work || "").slice(0, 80))}${s.paint ? " · Paint: " + esc(s.paint.slice(0, 60)) : ""}</div>` : ""}</td>
       <td class="n hm">${a.days.size}</td><td class="n">${h2(a.hours)}</td><td class="n hm">${a.man ? h2(a.man) : "—"}</td><td class="n">${p ? m2(p) : "—"}</td><td class="n">${g ? m2(g) : "—"}</td><td class="n">${p ? m2(bal) : "—"}</td><td class="n hm">${p && a.hours ? m2(p / a.hours) : "—"}</td></tr>`;
   });
-  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, m: t.m + (a.man || 0), h: t.h + a.hours, p: t.p + a.total, g: t.g + num(a.s.paidAmount) }), { d: 0, m: 0, h: 0, p: 0, g: 0 });
+  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, m: t.m + (a.man || 0), h: t.h + a.hours, p: t.p + a.total, g: t.g + paidOf(a.s) }), { d: 0, m: 0, h: 0, p: 0, g: 0 });
   if (rows.length) rows.push(`<tr class="total"><td class="first">Total · ${js.length} job${js.length === 1 ? "" : "s"}</td><td class="n hm">${T.d}</td><td class="n">${h2(T.h)}</td><td class="n hm">${T.m ? h2(T.m) : "—"}</td><td class="n">${m2(T.p)}</td><td class="n">${m2(T.g)}</td><td class="n">${m2(T.p - T.g)}</td><td class="hm"></td></tr>`);
   return table([["Job"], ["Days", "n hm"], ["Hrs", "n"], ["Man-hrs", "n hm"], ["Pay", "n"], ["Paid", "n"], ["Due", "n"], ["$/hr", "n hm"]], rows,
     { note: "A job is listed in the period of its last day worked. Days = days worked on that job, so a day with two jobs counts once for each. Totals use whole-job figures. Pay = job pay, Paid = received, Due = still owed." });
@@ -180,6 +183,16 @@ function viewDay(es) {
 }
 
 /* PAINTS: what was used where */
+const street = a => String(a || "").split(",")[0].trim();
+function viewPayments() {
+  const ps = payLive.filter(p => inRange(p.date)).sort((a, b) => b.date.localeCompare(a.date)), jobOf = id => jobs.find(j => j.id === id);
+  const el = document.createElement("div");
+  const rows = ps.map(p => { const ap = appliedLive.filter(a => a.paymentId === p.id), un = num(p.amount) - ap.reduce((t, a) => t + num(a.amount), 0);
+    return `<tr><td>${fmtD(p.date)}</td><td>${esc(p.from || "")}</td><td class="n">${m2(p.amount)}</td><td>${ap.map(a => `${esc(street((jobOf(a.siteId) || {}).address))} ${m2(a.amount)}`).join("<br>") || "—"}${un > 0.004 ? `<br><em>Not applied ${m2(un)}</em>` : ""}</td></tr>`; }).join("");
+  el.innerHTML = ps.length ? `<table><thead><tr><th>Date</th><th>From</th><th class="n">Amount</th><th>Applied to</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="2">Total</td><td class="n">${m2(ps.reduce((t, p) => t + num(p.amount), 0))}</td><td></td></tr></tfoot></table>` : `<div class="empty">No payments recorded in this period.</div>`;
+  lastCsvRows = ps.map(p => [p.date, p.from || "", num(p.amount), appliedLive.filter(a => a.paymentId === p.id).map(a => `${street((jobOf(a.siteId) || {}).address)} ${num(a.amount)}`).join("; "), p.note || ""]);
+  return el;
+}
 function viewPaints(js) {
   const all = (state.paints || []).filter(live), rows = [];
   for (const a of js) {
@@ -218,7 +231,7 @@ function wireGrid() { const g = $("#gm"); if (g) g.onchange = e => { gridMonth =
 
 /* CSV / events */
 let lastCsvRows = [], lastCsvHead = null;
-const HEADS = { paint: ["Job", "Brand", "Product", "Type", "Color code", "Color name", "Sheen", "Base", "Order #", "Date mixed", "Store", "Store phone", "Product code", "Used for", "Notes"],  job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
+const HEADS = { pay: ["Date", "From", "Amount", "Applied to", "Note"], paint: ["Job", "Brand", "Product", "Type", "Color code", "Color name", "Sheen", "Base", "Order #", "Date mixed", "Store", "Store phone", "Product code", "Used for", "Notes"],  job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
 const _draw = draw; draw = function () { lastCsvRows = []; lastCsvHead = null; _draw(); };
 function setView(v) { view = v; draw(); }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setView(b.dataset.v));

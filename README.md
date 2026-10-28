@@ -60,3 +60,6 @@ The app only has the `drive.file` permission, so it can only see files it create
 
 ## Calendar
 Each day shows the house photo of every job worked, with a pay light on it: 🔴 not paid, 🟡 partly paid, 🟢 paid in full. Tap a day to list its jobs, then tap a job to open its **front page** (the main page with Days, Photos, Paints, Notes and Pay). **Double-tap a day** to jump straight to that job's front page when only one job was worked that day.
+
+## Payments (who paid, when, and which jobs it covered)
+On the **Pay** tab tap **💵 I got paid**. Type the amount, check the date and who paid (Ignacio is filled in), and the app lists the jobs it covers, **oldest unpaid job first**. Change any amount if you want, then save. Every payment is kept with its date, payer and note, and shows which jobs it was applied to. Money that doesn't cover a job stays as "not applied yet" until you tap **Apply to jobs**. A job's Pay page lists the payments that went toward it. Deleting a payment makes those jobs owe again. Payments are in the Ledger (Payments view + CSV), the boss report, and sync to the Google Sheet (Payments and Applied tabs). Older amounts typed before this feature show as "Earlier payments".

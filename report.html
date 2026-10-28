@@ -80,11 +80,13 @@ const pad = n => String(n).padStart(2, "0"), ymd = d => `${d.getFullYear()}-${pa
 const street = a => String(a || "").split(",")[0].trim(), rest = a => String(a || "").split(",").slice(1).join(",").trim();
 
 /* jobs with their days, whole-job figures */
+const payById = Object.fromEntries((state.payments || []).filter(live).map(p => [p.id, p]));
+const paysOf = id => (state.applied || []).filter(a => live(a) && a.siteId === id && payById[a.paymentId]).map(a => ({ date: payById[a.paymentId].date, from: payById[a.paymentId].from, amount: num(a.amount) })).sort((a, b) => a.date.localeCompare(b.date));
 const days = state.visits.filter(v => live(v) && v.end);
 const jobs = state.sites.filter(live).map(s => {
   const es = state.visits.filter(v => live(v) && v.siteId === s.id).sort((a, b) => a.start.localeCompare(b.start));
-  const total = s.payMode === "flat" ? num(s.pay) : es.reduce((t, v) => t + num(v.rate), 0), paid = num(s.paidAmount);
-  return { s, es, total, paid, owed: Math.max(0, total - paid), last: es.length ? dayOf(es[es.length - 1].start) : "" };
+  const total = s.payMode === "flat" ? num(s.pay) : es.reduce((t, v) => t + num(v.rate), 0), pays = paysOf(s.id), paid = num(s.paidAmount) + pays.reduce((t, a) => t + a.amount, 0);
+  return { s, es, total, paid, pays, owed: Math.max(0, total - paid), last: es.length ? dayOf(es[es.length - 1].start) : "" };
 }).filter(j => j.es.length || j.total);
 
 let from = "", to = "", onlyOwed = false, preset = "month", rows = [], earlier = [];
@@ -98,13 +100,14 @@ function setPreset(p) {
 }
 const inRange = d => (!from || d >= from) && (!to || d <= to);
 const dayName = v => v.dayType === "half" ? "Half" : v.dayType === "custom" ? "Custom " + money(v.rate) : "Full";
+const payLine = j => (j.pays.map(a => `${fmt(a.date)} ${money(a.amount)}${a.from ? " from " + a.from : ""}`).concat(num(j.s.paidAmount) ? [`Earlier ${money(j.s.paidAmount)}`] : [])).join(" · ");
 const dayChips = j => j.es.map(v => `<span class="d ${v.dayType === "half" ? "half" : ""}">${fmt(v.start)} · ${dayName(v)}</span>`).join("");
 
 function jobHtml(j) {
   const status = j.total && !j.owed ? `<span class="badge">✓ Paid in full</span>` : j.s.done ? `<span class="badge" style="background:var(--field);color:var(--muted)">Finished</span>` : "";
   return `<div class="card job"><div class="row"><div><h3>${esc(street(j.s.address))}</h3><div class="muted">${esc(rest(j.s.address))}</div></div>${status}</div>
     <div class="days">${dayChips(j) || `<span class="muted">No days logged</span>`}</div>
-    <div class="money3"><div><div class="k">Earned</div><div class="v">${money(j.total)}</div></div><div><div class="k">Paid</div><div class="v paid">${money(j.paid)}</div></div><div><div class="k">Owed</div><div class="v ${j.owed ? "owed" : ""}">${money(j.owed)}</div></div></div></div>`;
+    <div class="money3"><div><div class="k">Earned</div><div class="v">${money(j.total)}</div></div><div><div class="k">Paid</div><div class="v paid">${money(j.paid)}</div></div><div><div class="k">Owed</div><div class="v ${j.owed ? "owed" : ""}">${money(j.owed)}</div></div></div>${payLine(j) ? `<div class="muted" style="margin-top:8px">💵 Payments: ${esc(payLine(j))}</div>` : ""}</div>`;
 }
 function draw() {
   const worked = jobs.filter(j => j.es.some(v => inRange(dayOf(v.start))) && (!onlyOwed || j.owed > 0)).sort((a, b) => b.last.localeCompare(a.last));
@@ -118,16 +121,18 @@ function draw() {
   $("#tiles").innerHTML = `${worked.length} job${worked.length === 1 ? "" : "s"} · ${nDays} day${nDays === 1 ? "" : "s"} worked · <span class="owed">${money(T.o)} still owed</span>`;
   $("#jobs").innerHTML = (worked.length ? `<h2>${onlyOwed ? "Unpaid jobs" : "Jobs worked"}</h2>` + worked.map(jobHtml).join("") : `<div class="empty">No jobs in this period.</div>`)
     + (earlier.length ? `<h2>Earlier jobs still owed</h2>` + earlier.map(jobHtml).join("") : "");
+  const recv = (state.payments || []).filter(p => live(p) && inRange(p.date)).sort((a, b) => a.date.localeCompare(b.date)); report0 = recv;
+  $("#jobs").innerHTML += recv.length ? `<h2>Payments received</h2><div class="card">${recv.map(p => `<div class="row" style="padding:6px 0"><span>${fmtY(p.date)}${p.from ? " · " + esc(p.from) : ""}${p.note ? " · " + esc(p.note) : ""}</span><strong>${money(p.amount)}</strong></div>`).join("")}<div class="row" style="padding-top:8px;border-top:1px solid var(--line)"><strong>Total received</strong><strong>${money(recv.reduce((t, p) => t + num(p.amount), 0))}</strong></div></div>` : "";
   $("#total").innerHTML = [["Total earned", T.e], ["Total paid", T.p], ["Total owed", T.o]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${money(v)}</div></div>`).join("");
   document.querySelectorAll(".controls [data-p]").forEach(b => b.classList.toggle("on", b.dataset.p === preset));
   report = { worked, earlier, T };
 }
 function periodLabel() { return onlyOwed ? "Unpaid jobs" : !from && !to ? "All time" : `${from ? fmtY(from) : "Start"} – ${to ? fmtY(to) : "today"}`; }
-let report = null;
+let report = null, report0 = [];
 function text() {
-  const { worked, earlier, T } = report, line = j => `${street(j.s.address)}${rest(j.s.address) ? ", " + rest(j.s.address) : ""}\n  Days: ${j.es.map(v => `${fmt(v.start)} (${v.dayType === "half" ? "half" : v.dayType === "custom" ? "custom " + money(v.rate) : "full"})`).join(", ") || "none"}\n  Earned ${money(j.total)} · Paid ${money(j.paid)} · Owed ${money(j.owed)}`;
+  const { worked, earlier, T } = report, line = j => `${street(j.s.address)}${rest(j.s.address) ? ", " + rest(j.s.address) : ""}\n  Days: ${j.es.map(v => `${fmt(v.start)} (${v.dayType === "half" ? "half" : v.dayType === "custom" ? "custom " + money(v.rate) : "full"})`).join(", ") || "none"}\n  Earned ${money(j.total)} · Paid ${money(j.paid)} · Owed ${money(j.owed)}${payLine(j) ? "\n  Payments: " + payLine(j) : ""}`;
   const head = `Work summary${st.myName ? " — " + st.myName : ""}${st.bossName ? " (for " + st.bossName + ")" : ""}\n${periodLabel()}`;
-  return [head, "", ...worked.map(line), ...(earlier.length ? ["", "Earlier jobs still owed:", ...earlier.map(line)] : []), "", `TOTAL — Earned ${money(T.e)} · Paid ${money(T.p)} · Owed ${money(T.o)}`].join("\n");
+  return [head, "", ...worked.map(line), ...(earlier.length ? ["", "Earlier jobs still owed:", ...earlier.map(line)] : []), ...(report0.length ? ["", "Payments received:", ...report0.map(p => `  ${fmtY(p.date)}${p.from ? " from " + p.from : ""}: ${money(p.amount)}`)] : []), "", `TOTAL — Earned ${money(T.e)} · Paid ${money(T.p)} · Owed ${money(T.o)}`].join("\n");
 }
 document.querySelectorAll(".controls [data-p]").forEach(b => b.onclick = () => setPreset(b.dataset.p));
 $("#from").onchange = e => { from = e.target.value; preset = ""; onlyOwed = false; draw(); };

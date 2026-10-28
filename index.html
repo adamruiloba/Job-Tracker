@@ -257,8 +257,8 @@ const avatar = (n, big) => `<span class="av${big ? " big" : ""}" style="backgrou
    people   = your employees: {id,name}
    tasks    = optional "what this person did" note for one day: {id: visitId:personId, visitId,siteId,personId,text} */
 const LS = "painterJobs.v2";
-const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks", "paints", "areas"];
-let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], areas: [], settings: { clientId: "", sheetId: "", fullRate: 150, halfRate: 75, ratesInit: false, myName: "", bossName: "Ignacio" } };
+const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks", "paints", "areas", "payments", "applied"];
+let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], areas: [], payments: [], applied: [], settings: { clientId: "", sheetId: "", fullRate: 150, halfRate: 75, ratesInit: false, myName: "", bossName: "Ignacio" } };
 function load() {
   const def = state.settings;
   try { const s = JSON.parse(localStorage.getItem(LS)); if (s) state = { ...state, ...s, settings: { ...def, ...s.settings } }; } catch {}
@@ -302,7 +302,7 @@ function resizeImage(file, max=1600) {
 let redirects = {};
 function absorb(keep, dup) {
   state.visits.forEach(v => { if (v.siteId === dup.id) { v.siteId = keep.id; touch(v); } });
-  for (const k of ["photos", "notes", "contacts", "tasks", "paints", "areas"]) state[k].forEach(o => { if (o.siteId === dup.id) { o.siteId = keep.id; touch(o); } });
+  for (const k of ["photos", "notes", "contacts", "tasks", "paints", "areas", "applied"]) state[k].forEach(o => { if (o.siteId === dup.id) { o.siteId = keep.id; touch(o); } });
   if (!(Number(keep.pay) > 0) && Number(dup.pay) > 0) { keep.pay = dup.pay; if (!entriesOf(keep).some(v => Number(v.rate) > 0)) keep.payMode = "flat"; }
   keep.paidAmount = (Number(keep.paidAmount) || 0) + (Number(dup.paidAmount) || 0) || "";
   if (dup.paidDate && (!keep.paidDate || dup.paidDate > keep.paidDate)) keep.paidDate = dup.paidDate;
@@ -400,7 +400,15 @@ const dayRate = v => Number(v.rate) || 0;
 const dayLabel = v => v.dayType === "half" ? "Half day" : v.dayType === "custom" ? "Custom" : "Full day";
 const dayCls = v => v.dayType === "half" ? "half" : v.dayType === "custom" ? "custom" : "full";
 const jobTotal = s => s.payMode === "flat" ? Number(s.pay) || 0 : entriesOf(s).reduce((a, v) => a + dayRate(v), 0);
-const paidOf = s => Number(s.paidAmount) || 0;
+/* money received: each payment has a date and who paid it, and is applied to one or more jobs (oldest unpaid job first). "paidAmount" on a job is only the older, undated total. */
+const r2 = n => Math.round(n * 100) / 100;
+const paymentById = id => state.payments.find(p => p.id === id && live(p));
+const appliedOfJob = s => state.applied.filter(a => live(a) && a.siteId === s.id && paymentById(a.paymentId));
+const appliedOfPayment = p => state.applied.filter(a => live(a) && a.paymentId === p.id && jobById(a.siteId));
+const unappliedOf = p => Math.max(0, r2(Number(p.amount) - appliedOfPayment(p).reduce((t, a) => t + Number(a.amount), 0)));
+const paymentsNewest = () => state.payments.filter(live).sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.id.localeCompare(a.id));
+const paidOf = s => r2((Number(s.paidAmount) || 0) + appliedOfJob(s).reduce((t, a) => t + Number(a.amount), 0));
+const lastPaidOn = s => [s.paidAmount ? s.paidDate : "", ...appliedOfJob(s).map(a => paymentById(a.paymentId).date)].filter(Boolean).sort().pop() || "";
 const owedOf = s => Math.max(0, jobTotal(s) - paidOf(s));
 /* paid status of a job: 🔴 not paid, 🟡 part paid, 🟢 paid in full ("" when there is nothing to pay yet) */
 const payState = s => { const t = jobTotal(s), p = paidOf(s); return t <= 0 ? "" : p <= 0 ? "none" : p < t ? "part" : "full"; };
@@ -804,7 +812,7 @@ function tabDetails(box, s) {
   $("#j-del").onclick = () => {
     if (!confirm("Delete this job and everything in it (days, notes, contacts, photo list)?")) return;
     entriesOf(s).forEach(v => touch(Object.assign(v, { deleted: true })));
-    for (const k of ["photos", "notes", "contacts", "tasks", "paints", "areas"]) state[k].filter(o => o.siteId === s.id).forEach(o => touch(Object.assign(o, { deleted: true })));
+    for (const k of ["photos", "notes", "contacts", "tasks", "paints", "areas", "applied"]) state[k].filter(o => o.siteId === s.id).forEach(o => touch(Object.assign(o, { deleted: true })));
     touch(Object.assign(s, { deleted: true })); save(); openJob = null; render();
   };
 }
@@ -939,6 +947,59 @@ function tabNotes(box, s) {
   box.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => { if (confirm("Delete this contact?")) { touch(Object.assign(state.contacts.find(c => c.id === b.dataset.cdel), { deleted: true })); save(); render(); } });
 }
 
+function addPayment(o, allocs) {
+  const p = touch({ id: uid(), date: o.date || todayStr(), amount: r2(Number(o.amount)), from: (o.from || "").trim(), note: (o.note || "").trim(), deleted: false }); state.payments.push(p);
+  for (const a of allocs) if (a.amt > 0) state.applied.push(touch({ id: uid(), paymentId: p.id, siteId: a.s.id, amount: r2(a.amt), deleted: false }));
+  return p;
+}
+function autoPlan(avail) {
+  let left = avail;
+  return jobs().filter(s => owedOf(s) > 0).sort((a, b) => (dayOf(stats(a).first) || "9999").localeCompare(dayOf(stats(b).first) || "9999") || a.id.localeCompare(b.id))
+    .map(s => { const amt = Math.min(owedOf(s), Math.max(0, left)); left = r2(left - amt); return { s, amt }; });
+}
+function removePayment(p) { touch(Object.assign(p, { deleted: true })); state.applied.filter(a => a.paymentId === p.id).forEach(a => touch(Object.assign(a, { deleted: true }))); }
+const payerName = () => state.settings.bossName || "";
+function appliedLine(p) { const ap = appliedOfPayment(p); return ap.length ? ap.map(a => `${esc(streetOf(jobById(a.siteId).address))} ${money(a.amount)}`).join(" · ") : ""; }
+/* the "I got paid" sheet: type the amount, see which jobs it covers (oldest first), adjust, save */
+function openPaySheet(ex) {
+  const bg = document.createElement("div"); bg.className = "sheet-bg"; let plan = [], avail = ex ? unappliedOf(ex) : 0;
+  bg.innerHTML = `<div class="sheet"><h3 style="margin:0 0 8px">💵 ${ex ? "Apply leftover money" : "I got paid"}</h3>
+    ${ex ? `<div class="muted">From ${esc(ex.from || "—")} · ${fmtDay(ex.date)} · <b>${money(avail)}</b> not applied yet</div>` : `
+    <label>How much did you receive?</label><div class="money"><input id="ps-amt" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="row top" style="gap:8px"><div class="grow"><label>Date received</label><input id="ps-date" type="date" value="${todayStr()}"></div><div class="grow"><label>Paid by</label><input id="ps-from" value="${esc(payerName())}" placeholder="Who paid you"></div></div>
+    <label>Note (optional)</label><input id="ps-note" placeholder="Check #, Zelle, cash…">`}
+    <h3 style="margin:16px 0 2px">Goes to these jobs</h3><div class="muted" style="margin-bottom:6px">Oldest unpaid job first. Change an amount if you need to.</div>
+    <div id="ps-rows"></div><div id="ps-left" class="row" style="padding:10px 0;border-top:1px solid var(--line);margin-top:6px"></div>
+    <div class="actions"><button class="primary" id="ps-save">Save payment</button><button id="ps-x">Cancel</button></div></div>`;
+  document.body.append(bg); bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  const left = () => r2(avail - plan.reduce((t, r) => t + r.amt, 0));
+  const showLeft = () => { const l = left(); $("#ps-left").innerHTML = `<span>${l < 0 ? "Too much given out" : "Left over"}</span><strong class="${l < 0 ? "owed" : ""}">${money(l)}</strong>`; };
+  const drawRows = () => {
+    $("#ps-rows").innerHTML = plan.length ? plan.map((r, i) => `<div class="line"><div class="grow"><div style="font-weight:700">${esc(streetOf(r.s.address))}</div><div class="muted">${fmtShort(dayOf(stats(r.s).first))} · owes ${money(owedOf(r.s))}</div></div><div class="money" style="width:110px"><input data-pi="${i}" type="number" inputmode="decimal" min="0" step="0.01" value="${r.amt || ""}" placeholder="0" style="min-height:40px;padding:6px 8px 6px 24px"></div></div>`).join("") : `<div class="muted" style="padding:8px 0">No unpaid jobs right now. The money is saved and can be applied later.</div>`;
+    $("#ps-rows").querySelectorAll("[data-pi]").forEach(el => el.oninput = () => { plan[+el.dataset.pi].amt = Math.max(0, Number(el.value) || 0); showLeft(); });
+    showLeft();
+  };
+  const replan = () => { plan = autoPlan(avail); drawRows(); };
+  if (!ex) $("#ps-amt").oninput = () => { avail = Math.max(0, Number($("#ps-amt").value) || 0); replan(); $("#ps-amt").focus(); };
+  replan(); if (!ex) $("#ps-amt").focus();
+  $("#ps-x").onclick = () => bg.remove();
+  $("#ps-save").onclick = () => {
+    if (!(avail > 0)) return toast("Enter the amount received");
+    if (left() < 0) return toast("Those add up to more than you received");
+    const given = plan.filter(r => r.amt > 0);
+    if (ex) { given.forEach(r => state.applied.push(touch({ id: uid(), paymentId: ex.id, siteId: r.s.id, amount: r2(r.amt), deleted: false }))); }
+    else addPayment({ amount: avail, date: $("#ps-date").value, from: $("#ps-from").value, note: $("#ps-note").value }, given);
+    save(); bg.remove(); toast(given.length ? `Saved · applied to ${given.length} job${given.length > 1 ? "s" : ""}` : "Saved"); render();
+  };
+}
+const paymentCard = (p, only) => { const ap = appliedOfPayment(p), un = unappliedOf(p);
+  return `<div class="card"><div class="row top"><div><div style="font-weight:800;font-size:17px">${money(p.amount)}</div><div class="muted">${fmtDay(p.date)}${p.from ? " · from " + esc(p.from) : ""}${p.note ? " · " + esc(p.note) : ""}</div></div><button class="small danger" data-delpay="${p.id}" aria-label="Delete payment">✕</button></div>
+    ${ap.length ? `<div class="muted" style="margin-top:6px">Applied to: ${appliedLine(p)}</div>` : ""}
+    ${un > 0 ? `<div class="row" style="margin-top:8px"><span class="chip part">${money(un)} not applied yet</span><button class="small soft" data-applypay="${p.id}">Apply to jobs</button></div>` : ""}</div>`; };
+function hookPayments(root) {
+  root.querySelectorAll("[data-delpay]").forEach(b => b.onclick = () => { const p = paymentById(b.dataset.delpay); if (p && confirm(`Delete this ${money(p.amount)} payment from ${fmtDay(p.date)}?\n\nThe jobs it paid go back to owing.`)) { removePayment(p); save(); render(); } });
+  root.querySelectorAll("[data-applypay]").forEach(b => b.onclick = () => openPaySheet(paymentById(b.dataset.applypay)));
+}
 function tabPay(box, s, st) {
   const ps = payStatus(s), flat = s.payMode === "flat";
   box.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">💵 Pay</h3><span class="chip ${ps}">${statusLabel[ps]}</span></div>
@@ -950,16 +1011,17 @@ function tabPay(box, s, st) {
         <div class="row" style="padding-top:10px;border-top:1px solid var(--line)"><strong>Job total</strong><strong style="font-size:19px">${money(jobTotal(s))}</strong></div>
         ${defaultRate("full") || defaultRate("half") ? "" : `<div class="muted" style="margin-top:8px">Tip: set your usual full-day and half-day rates in Settings and they fill in automatically.</div>`}</div>`}
     <div class="bignums" style="margin:16px 0 2px"><div><small>Received</small><b class="paid">${money(paidOf(s))}</b></div><div><small>Still owed</small><b class="owed">${money(owedOf(s))}</b></div></div>
-    ${s.paidDate ? `<div class="muted" style="margin-top:10px">Last payment ${fmtDay(s.paidDate)}</div>` : ""}
-    <div class="actions">${owedOf(s) > 0 ? `<button class="good" id="j-full">✓ Mark paid in full</button>` : ""}<button id="j-part">Enter amount received…</button>${paidOf(s) ? `<button class="danger" id="j-unpay">Clear</button>` : ""}</div></div>`;
+    ${(s.paidAmount ? `<div class="line"><span>Earlier payments${s.paidDate ? " · " + fmtDay(s.paidDate) : " (no date)"}</span><span class="row" style="gap:8px"><strong>${money(s.paidAmount)}</strong><button class="small danger" id="j-unpay" aria-label="Remove">✕</button></span></div>` : "") + appliedOfJob(s).sort((a, b) => paymentById(b.paymentId).date.localeCompare(paymentById(a.paymentId).date)).map(a => { const p = paymentById(a.paymentId); return `<div class="line"><div><div style="font-weight:700">${fmtDay(p.date)}</div><div class="muted">${p.from ? "from " + esc(p.from) : "payment"}${p.amount > a.amount ? ` · part of ${money(p.amount)}` : ""}</div></div><span class="row" style="gap:8px"><strong>${money(a.amount)}</strong><button class="small danger" data-unapply="${a.id}" aria-label="Remove">✕</button></span></div>`; }).join("")}
+    <div class="actions">${owedOf(s) > 0 ? `<button class="good" id="j-full">✓ Mark paid in full</button>` : ""}<button id="j-part">＋ Enter an amount received…</button></div></div>`;
   box.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { s.payMode = b.dataset.pm; touch(s); save(); render(); });
   if ($("#j-pay-save")) $("#j-pay-save").onclick = () => { s.pay = $("#j-pay").value === "" ? "" : Number($("#j-pay").value); touch(s); save(); toast("Price saved"); render(); };
   box.querySelectorAll("[data-dt]").forEach(el => el.onchange = () => { const v = state.visits.find(x => x.id === el.dataset.dt); setDayType(v, el.value); save(); render(); });
   box.querySelectorAll("[data-rate]").forEach(el => el.onchange = () => { const v = state.visits.find(x => x.id === el.dataset.rate); v.rate = el.value === "" ? "" : Number(el.value); if (v.dayType !== "custom" && v.rate !== "" && Number(v.rate) !== Number(defaultRate(v.dayType))) v.dayType = "custom"; touch(v); save(); render(); }); // a different amount is a custom day
-  const setPaid = amt => { s.paidAmount = amt; s.paidDate = amt ? todayStr() : ""; touch(s); save(); render(); };
-  if ($("#j-full")) $("#j-full").onclick = () => { if (!(jobTotal(s) > 0)) return toast("Set the pay first"); setPaid(jobTotal(s)); };
-  $("#j-part").onclick = () => { const a = parseFloat(prompt("Total amount received so far ($):", paidOf(s) || owedOf(s) || "")); if (a >= 0) setPaid(a); };
-  if ($("#j-unpay")) $("#j-unpay").onclick = () => setPaid("");
+  const payJob = amt => { addPayment({ amount: amt, date: todayStr(), from: payerName() }, [{ s, amt }]); save(); toast(`${money(amt)} recorded`); render(); };
+  if ($("#j-full")) $("#j-full").onclick = () => { if (!(jobTotal(s) > 0)) return toast("Set the pay first"); payJob(owedOf(s)); };
+  $("#j-part").onclick = () => { const a = parseFloat(prompt("Amount received for this job ($):", owedOf(s) || "")); if (a > 0) payJob(a); };
+  if ($("#j-unpay")) $("#j-unpay").onclick = () => { if (confirm("Remove the earlier undated payments?")) { s.paidAmount = ""; s.paidDate = ""; touch(s); save(); render(); } };
+  box.querySelectorAll("[data-unapply]").forEach(b => b.onclick = () => { if (confirm("Take this payment off this job? The money stays in your payments, not applied.")) { touch(Object.assign(state.applied.find(x => x.id === b.dataset.unapply), { deleted: true })); save(); render(); } });
 }
 
 /* ---------- reading a paint label (the sticker the store prints) ---------- */
@@ -1289,21 +1351,29 @@ function viewPay(app) {
   const noPrice = js.filter(s => !(jobTotal(s) > 0) && stats(s).es.length);
   const months = {};
   all.forEach(v => { const m = v.start.slice(0, 7), r = months[m] ||= { days: 0, jobs: new Set(), got: 0 }; r.days++; r.jobs.add(v.siteId); });
-  js.forEach(s => { if (paidOf(s) && s.paidDate) { const m = s.paidDate.slice(0, 7), r = months[m] ||= { days: 0, jobs: new Set(), got: 0 }; r.got += paidOf(s); } });
+  js.forEach(s => { if (Number(s.paidAmount) && s.paidDate) { const m = s.paidDate.slice(0, 7), r = months[m] ||= { days: 0, jobs: new Set(), got: 0 }; r.got += Number(s.paidAmount); } });
+  const pays = paymentsNewest(); pays.forEach(p => { const m = (p.date || todayStr()).slice(0, 7), r = months[m] ||= { days: 0, jobs: new Set(), got: 0 }; r.got += Number(p.amount); });
+  const pending = r2(pays.reduce((t, p) => t + unappliedOf(p), 0));
   app.innerHTML = `
     <div class="bignums"><div><small>Owed to me</small><b class="owed">${money(owed)}</b></div><div><small>Received</small><b class="paid">${money(paid)}</b></div></div>
+    <button class="primary block" id="got-paid" style="margin:4px 0 12px;min-height:54px;font-size:18px">💵 I got paid</button>
+    ${pending > 0 ? `<div class="card" style="background:var(--warn-soft)"><strong>${money(pending)} received but not applied to a job yet</strong><div class="muted">Find it under Payments received and tap “Apply to jobs”.</div></div>` : ""}
     <a class="card row tap" href="report.html" style="color:inherit;text-decoration:none"><span><strong>📤 Report for ${esc(state.settings.bossName || "your boss")}</strong><div class="muted">Jobs, days worked, owed and paid. Easy to send.</div></span><span style="font-size:22px">›</span></a>
     <a class="card row tap" href="ledger.html" style="color:inherit;text-decoration:none"><span><strong>📒 Ledger</strong><div class="muted">By job, by day, and a day × job grid</div></span><span style="font-size:22px">›</span></a>
     ${noPrice.length ? `<div class="card" style="background:var(--warn-soft)"><strong>${noPrice.length} job${noPrice.length > 1 ? "s" : ""} with no pay yet</strong><div class="muted">Open each job → Pay and set the day rates so they count here.</div></div>` : ""}
     <h2>Waiting on payment</h2>
     ${unpaid.length ? unpaid.map(s => `<div class="card"><div class="row tap" data-job-open="${s.id}">${thumb(s, "sm")}<div class="grow"><div class="street">${esc(streetOf(s.address))}</div><div class="muted">${stats(s).days} day${stats(s).days === 1 ? "" : "s"} · earned ${money(jobTotal(s))}${paidOf(s) ? " · paid " + money(paidOf(s)) : ""}</div></div><strong class="owed" style="font-size:19px">${money(owedOf(s))}</strong></div>
       <div class="actions"><button class="good small" data-full="${s.id}">✓ Mark paid in full</button></div></div>`).join("") : `<div class="empty"><span class="big-emoji">🎉</span>Nothing owed.</div>`}
+    <h2>Payments received</h2>
+    ${pays.length ? pays.map(p => paymentCard(p)).join("") : `<div class="muted" style="padding:0 4px 8px">None yet. Tap “I got paid” when money comes in. It's saved with the date and who it came from.</div>`}
     <h2>By month</h2>
     ${Object.keys(months).sort().reverse().map(m => { const r = months[m]; return `<div class="card"><div class="row"><strong>${new Date(m + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong><span class="muted">${r.days} day${r.days === 1 ? "" : "s"} · ${r.jobs.size} job${r.jobs.size === 1 ? "" : "s"}</span></div>
-      <div class="muted" style="margin-top:4px">Received this month: <strong class="paid">${money(r.got)}</strong></div></div>`; }).join("") || `<div class="muted" style="padding:0 4px">Nothing yet.</div>`}
+      <div class="muted" style="margin-top:4px">Money received this month: <strong class="paid">${money(r.got)}</strong></div></div>`; }).join("") || `<div class="muted" style="padding:0 4px">Nothing yet.</div>`}
     <div class="actions"><button id="csv-jobs">⬇️ Jobs (CSV)</button><button id="csv-time">⬇️ Days (CSV)</button></div>`;
   app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = () => goJob(c.dataset.jobOpen, "pay"));
-  app.querySelectorAll("[data-full]").forEach(b => b.onclick = () => { const s = jobById(b.dataset.full); s.paidAmount = jobTotal(s); s.paidDate = todayStr(); touch(s); save(); render(); });
+  $("#got-paid").onclick = () => openPaySheet();
+  hookPayments(app);
+  app.querySelectorAll("[data-full]").forEach(b => b.onclick = () => { const s = jobById(b.dataset.full); addPayment({ amount: owedOf(s), date: todayStr(), from: payerName() }, [{ s, amt: owedOf(s) }]); save(); toast("Marked paid"); render(); });
   const qt = x => `"${String(x ?? "").replace(/"/g, '""')}"`;
   $("#csv-jobs").onclick = () => download("jobs.csv", new Blob([[["Address","Owner","Owner phone","First day","Last day","Days","Hours","Earned","Paid","Owed"].map(qt).join(",")].concat(js.map(s => { const st = stats(s); return [s.address, ownerName(s), s.ownerPhone, dayOf(st.first), dayOf(st.last), st.days, st.hours.toFixed(2), jobTotal(s), paidOf(s), owedOf(s)].map(qt).join(","); })).join("\n")], { type: "text/csv" }));
   $("#csv-time").onclick = () => download("days.csv", new Blob([[["Date","Address","Full/Half","Day pay","In","Out","Hours","Crew","Notes"].map(qt).join(",")].concat(all.sort((a, b) => a.start.localeCompare(b.start)).map(v => [dayOf(v.start), addrOf(v), dayLabel(v), v.rate, fmtTime(v.start), fmtTime(v.end), hoursOf(v).toFixed(2), crewNames(v).join("; "), v.notes].map(qt).join(","))).join("\n")], { type: "text/csv" }));
@@ -1386,15 +1456,17 @@ const COLS = {
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
   Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "hash", "updated", "deleted"],
   Areas: ["id", "siteId", "address", "name", "updated", "deleted"],
+  Payments: ["id", "date", "amount", "from", "note", "updated", "deleted"],
+  Applied: ["id", "paymentId", "siteId", "address", "amount", "updated", "deleted"],
   Paints: ["id", "siteId", "address", "brand", "product", "type", "colorCode", "colorName", "sheen", "base", "orderNo", "mixedDate", "store", "storePhone", "productCode", "formula", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
   Contacts: ["id", "siteId", "address", "name", "role", "phone", "updated", "deleted"],
   People: ["id", "name", "updated", "deleted"],
   CrewNotes: ["id", "visitId", "siteId", "address", "personId", "personName", "text", "updated", "deleted"],
 };
-const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints", Areas: "areas" };
-const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"], Areas: ["address"] };
-const NUM = new Set(["lat", "lng", "pay", "paidAmount", "lastPay", "rate", "updated"]);
+const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints", Areas: "areas", Payments: "payments", Applied: "applied" };
+const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"], Areas: ["address"], Applied: ["address"] };
+const NUM = new Set(["lat", "lng", "pay", "paidAmount", "amount", "lastPay", "rate", "updated"]);
 function merge(local, remote) {
   const m = new Map(local.map(x => [x.id, x]));
   for (const r of remote) { const l = m.get(r.id); if (!l || (r.updated || 0) > (l.updated || 0)) m.set(r.id, r); }
