@@ -968,7 +968,7 @@ function dayLines(s) {
 const spanShort = s => { const st = stats(s), a = dayOf(st.first), b = dayOf(st.last); return st.days ? (b !== a ? `${fmtShort(a)}–${fmtShort(b)}` : fmtShort(a)) : "no days yet"; };
 const jobHead = s => `${streetOf(s.address)} (${spanShort(s)})`;
 const byFirstDay = (a, b) => (dayOf(stats(a).first) || "9999").localeCompare(dayOf(stats(b).first) || "9999") || a.id.localeCompare(b.id);
-const thanks = () => ["Thanks again, I really appreciate the work and your trust.", myNameSig() ? "— " + myNameSig() : ""].filter(Boolean);
+const thanks = () => ["Let me know if I need to change anything on my end.", myNameSig() ? "— " + myNameSig() : ""].filter(Boolean);
 function openLines(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay).flatMap(s => [`• ${jobHead(s)}: ${money(owedOf(s))} still open`, ...dayLines(s)]); }
 function confirmText(p) {
   const ap = appliedOfPayment(p), un = unappliedOf(p), rest = openLines(ap.map(a => a.siteId)), totalOpen = jobs().reduce((t, s) => t + owedOf(s), 0);
@@ -976,13 +976,13 @@ function confirmText(p) {
   return [`Hey ${bossFirst()},`, "", `Here's a quick breakdown for your records. I received ${money(p.amount)} ${when}${p.note ? " (" + p.note + ")" : ""}, thank you! It covers:`, "",
     ...ap.flatMap(a => { const s = jobById(a.siteId); return [`• ${jobHead(s)}: ${money(a.amount)} ${owedOf(s) > 0 ? `(${money(owedOf(s))} still open on this job)` : "✓ paid in full"}`, ...dayLines(s), ""]; }),
     ...(un > 0 ? [`• ${money(un)} not assigned to a job yet`, ""] : []),
-    ...(rest.length ? ["Still open:", ...rest, ""] : []), totalOpen > 0 ? `Balance still open: ${money(totalOpen)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    ...(rest.length ? ["Still open:", ...rest, ""] : []), totalOpen > 0 ? `Amount currently accruing: ${money(totalOpen)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function updateText() {
   const js = jobs().filter(s => stats(s).days).sort(byFirstDay), earned = js.reduce((t, s) => t + jobTotal(s), 0), paid = js.reduce((t, s) => t + paidOf(s), 0), open = js.reduce((t, s) => t + owedOf(s), 0);
   return [`Hey ${bossFirst()},`, "", "Here's a breakdown of all the jobs so far, so you have it for your records:", "",
     ...js.flatMap(s => [`• ${jobHead(s)}: ${money(jobTotal(s))} · ${owedOf(s) > 0 ? `${money(paidOf(s))} received, ${money(owedOf(s))} still open` : "✓ paid in full"}`, ...dayLines(s), ""]),
-    `Total: ${money(earned)} · received ${money(paid)} · still open ${money(open)}`,
+    `Total: ${money(earned)} · received ${money(paid)} · currently accruing ${money(open)}`,
     ...(paymentsNewest().length ? ["", "Payments received:", ...paymentsNewest().slice(0, 6).reverse().map(p => `• ${fmtDay(p.date)}: ${money(p.amount)}`)] : []), "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 /* sheet with the message ready to send by text, email or any app */
