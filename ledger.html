@@ -102,6 +102,7 @@ const monthName = m => new Date(m + "-15T12:00:00").toLocaleDateString(undefined
 /* per-job totals (whole job) */
 const agg = {}; // man-hours = hours x people on the job that day
 for (const s of jobs) agg[s.id] = { s, es: [], hours: 0, days: new Set(), first: "", last: "" };
+for (const a of Object.values(agg)) a.total = a.s.payMode === "flat" ? num(a.s.pay) : (state.visits || []).filter(v => live(v) && v.siteId === a.s.id).reduce((t, v) => t + num(v.rate), 0); // by the day = sum of day rates; one price = the job's price
 for (const v of entries) { const a = agg[v.siteId]; a.es.push(v); a.hours += hrs(v); a.man = (a.man || 0) + hrs(v) * crewOf(v).length; a.days.add(dayOf(v.start)); a.first ||= dayOf(v.start); a.last = dayOf(v.start); }
 
 /* period */
@@ -124,11 +125,11 @@ function jobRows() {
 function draw() {
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
   const js = jobRows(), dayEs = entries.filter(v => inRange(dayOf(v.start)));
-  const pay = js.reduce((t, a) => t + num(a.s.pay), 0), got = js.reduce((t, a) => t + num(a.s.paidAmount), 0);
-  const jh = js.filter(a => num(a.s.pay) > 0).reduce((t, a) => t + a.hours, 0);
+  const pay = js.reduce((t, a) => t + a.total, 0), got = js.reduce((t, a) => t + num(a.s.paidAmount), 0);
+  const jh = js.filter(a => a.total > 0).reduce((t, a) => t + a.hours, 0);
   $("#summary").innerHTML = [
     ["Jobs", js.length], ["Days worked", new Set(dayEs.map(v => dayOf(v.start))).size], ["Hours", h2(dayEs.reduce((t, v) => t + hrs(v), 0))],
-    ["Job pay", m2(pay)], ["Received", m2(got)], ["Balance due", m2(pay - got)], ["Pay per hour", jh ? m2(js.filter(a => num(a.s.pay) > 0).reduce((t, a) => t + num(a.s.pay), 0) / jh) : "—"],
+    ["Job pay", m2(pay)], ["Received", m2(got)], ["Balance due", m2(pay - got)], ["Pay per hour", jh ? m2(js.filter(a => a.total > 0).reduce((t, a) => t + a.total, 0) / jh) : "—"],
   ].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
   $("#view").innerHTML = ""; $("#view").append(view === "job" ? viewJob(js) : view === "day" ? viewDay(dayEs) : viewGrid());
 }
@@ -143,13 +144,13 @@ function table(head, rows, opts = {}) {
 /* BY JOB */
 function viewJob(js) {
   const rows = js.map(a => {
-    const s = a.s, p = num(s.pay), g = num(s.paidAmount), bal = p - g;
+    const s = a.s, p = a.total, g = num(s.paidAmount), bal = p - g;
     lastCsvRows.push([s.address, s.done ? "Finished" : "Open", a.first, a.last, a.days.size, h2(a.hours), p || "", g || "", p ? bal : "", p && a.hours ? (p / a.hours).toFixed(2) : ""]);
     const when = a.es.length ? `${fmtShort(a.first)}${a.first !== a.last ? "–" + fmtShort(a.last) : ""} · ` : "";
     return `<tr><td class="job first">${esc(s.address)}${s.ownerFirst || s.ownerLast ? `<div class="muted" style="font-size:12px">👤 ${esc([s.ownerFirst, s.ownerLast].filter(Boolean).join(" "))}${s.ownerPhone ? " · " + esc(s.ownerPhone) : ""}</div>` : ""}<div class="muted" style="font-size:12px">${a.es.length ? a.days.size + (a.days.size === 1 ? " day · " : " days · ") : ""}${when}${s.done ? "Finished" : "Open"}</div>${s.work || s.paint ? `<div class="muted hm" style="font-size:12px">${esc((s.work || "").slice(0, 80))}${s.paint ? " · Paint: " + esc(s.paint.slice(0, 60)) : ""}</div>` : ""}</td>
       <td class="n hm">${a.days.size}</td><td class="n">${h2(a.hours)}</td><td class="n hm">${a.man ? h2(a.man) : "—"}</td><td class="n">${p ? m2(p) : "—"}</td><td class="n">${g ? m2(g) : "—"}</td><td class="n">${p ? m2(bal) : "—"}</td><td class="n hm">${p && a.hours ? m2(p / a.hours) : "—"}</td></tr>`;
   });
-  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, m: t.m + (a.man || 0), h: t.h + a.hours, p: t.p + num(a.s.pay), g: t.g + num(a.s.paidAmount) }), { d: 0, m: 0, h: 0, p: 0, g: 0 });
+  const T = js.reduce((t, a) => ({ d: t.d + a.days.size, m: t.m + (a.man || 0), h: t.h + a.hours, p: t.p + a.total, g: t.g + num(a.s.paidAmount) }), { d: 0, m: 0, h: 0, p: 0, g: 0 });
   if (rows.length) rows.push(`<tr class="total"><td class="first">Total · ${js.length} job${js.length === 1 ? "" : "s"}</td><td class="n hm">${T.d}</td><td class="n">${h2(T.h)}</td><td class="n hm">${T.m ? h2(T.m) : "—"}</td><td class="n">${m2(T.p)}</td><td class="n">${m2(T.g)}</td><td class="n">${m2(T.p - T.g)}</td><td class="hm"></td></tr>`);
   return table([["Job"], ["Days", "n hm"], ["Hrs", "n"], ["Man-hrs", "n hm"], ["Pay", "n"], ["Paid", "n"], ["Due", "n"], ["$/hr", "n hm"]], rows,
     { note: "A job is listed in the period of its last day worked. Days = days worked on that job, so a day with two jobs counts once for each. Totals use whole-job figures. Pay = job pay, Paid = received, Due = still owed." });
@@ -165,17 +166,17 @@ function viewDay(es) {
     if (d.slice(0, 7) !== curM) { flush(); curM = d.slice(0, 7); mH = 0; mP = 0; mark = rows.length; rows.push(`<tr class="month"><td class="first" colspan="2">${monthName(curM)}</td><td class="n">@H</td><td class="n">@P</td></tr>`); }
     const list = byDay[d]; let dh = 0, dp = 0;
     list.forEach((v, i) => {
-      const a = agg[v.siteId], h = hrs(v), p = num(a.s.pay) && a.hours ? num(a.s.pay) * h / a.hours : 0; dh += h; dp += p;
+      const a = agg[v.siteId], h = hrs(v), p = a.s.payMode === "flat" ? (a.total && a.hours ? a.total * h / a.hours : 0) : num(v.rate); dh += h; dp += p;
       lastCsvRows.push([d, a.s.address, fmtT(v.start), fmtT(v.end), h2(h), crewOf(v).length || "", crewOf(v).join("; "), p ? p.toFixed(2) : "", (v.notes || "").replace(/\s+/g, " ")]);
-      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)}${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div>${crewOf(v).length ? `<div class="muted" style="font-size:12px">👷 ${crewOf(v).length}: ${esc(crewOf(v).join(", "))}</div>` : ""}</td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
+      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)} · ${v.dayType === "half" ? "Half" : "Full"} day${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div>${crewOf(v).length ? `<div class="muted" style="font-size:12px">👷 ${crewOf(v).length}: ${esc(crewOf(v).join(", "))}</div>` : ""}</td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
     });
     if (list.length > 1) rows.push(`<tr class="sub"><td class="first">Day total</td><td>${list.length} jobs</td><td class="n">${h2(dh)}</td><td class="n">${dp ? m2(dp) : "—"}</td></tr>`);
     mH += dh; mP += dp; totH += dh; totP += dp;
   }
   flush();
   if (days.length) rows.push(`<tr class="total"><td class="first">Total · ${days.length} day${days.length === 1 ? "" : "s"}</td><td></td><td class="n">${h2(totH)}</td><td class="n">${m2(totP)}</td></tr>`);
-  return table([["Date"], ["Job"], ["Hrs", "n"], ["Share", "n"]], rows,
-    { note: "You're paid per job, so \"Share\" splits each job's pay across its days by hours worked. It's for reference only; the real figures are on the By job tab." });
+  return table([["Date"], ["Job"], ["Hrs", "n"], ["Pay", "n"]], rows,
+    { note: "Pay is each day's rate. For jobs paid one flat price, the price is split across its days by hours worked, for reference only." });
 }
 
 /* DAY × JOB GRID */
@@ -201,7 +202,7 @@ function wireGrid() { const g = $("#gm"); if (g) g.onchange = e => { gridMonth =
 
 /* CSV / events */
 let lastCsvRows = [], lastCsvHead = null;
-const HEADS = { job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Pay share", "Notes"] };
+const HEADS = { job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
 const _draw = draw; draw = function () { lastCsvRows = []; lastCsvHead = null; _draw(); };
 function setView(v) { view = v; draw(); }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setView(b.dataset.v));

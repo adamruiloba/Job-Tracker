@@ -3,18 +3,25 @@
 One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your own Google account**.
 
 ## How it works day to day
-**One address = one job, and you're paid per job.** Everything for that address lives on its job page.
-1. **Clock tab**: type the job's address (or pick one you've already saved) and tap **Clock In**. While you're clocked in, tap names to say **who's working today**. **Clock Out** is one tap. **Switch job** moves you to a second job the same day.
-2. **Jobs tab**: one card per job showing the owner's name and phone (tap to call), days, hours, crew size, what was done, and pay status. Cards have a **🧭 Directions** button for Google Maps.
-   - **Search** finds a job by owner name, phone number, address, paint, notes, contacts, or crew name. Filter by Open, Finished or Unpaid.
-3. **Job page**, in five sections:
-   - **📋 Details**: address, **owner** (first and last name, phone, special info), and the paint and what was done.
-   - **👷 Days & crew**: every day worked with exactly who was there. Day one might be 2 people, day three 4, the last day 1. Totals show each person's days and man-hours.
-   - **📷 Photos**, each with its date.
-   - **📝 Notes**: dated notes (neighbor complaints, requests, gate codes) and **other contacts** such as the building owner, with name, role and phone.
-   - **💵 Pay**: what the job pays, what you've received, what's still owed.
-4. **Pay tab**: what you're owed across all jobs, with "Mark paid in full" in one tap.
-5. **Settings → Your crew**: add the people who work with you once, then just tap names each day.
+**One address = one job.** Everything for that address lives on its job page, and every job shows a photo of the house so you know it at a glance.
+1. **Clock tab**: type the job's address and tap **Clock In**, or tap **Clock in** next to one of your jobs. Opening a job never clocks you in; only a Clock In button does. While you're clocked in, tap **Edit** to say who's working. **Clock Out** is one tap, and the app suggests Full or Half day from your hours (you can change it).
+2. **Calendar tab**: a month view (or week view) like Google Calendar. Each day shows a photo tile for every job you worked. Tap a day to see the jobs, times, full or half day, crew, pay, and tags like "Day 2 of 3", "🚩 Started" and "🏁 Finished".
+3. **Jobs tab**: one card per job with its house photo, owner, status, dates, and pay. **Search** by owner name, phone, address, paint, notes, contacts, or crew name. Opening a job shows:
+   - A **photo banner** (add or change it with the 📷 button). Under it: **Clock in**, **Directions**, **Call**, **Finish**.
+   - **Started / Finished / Took**: when the job began, ended, and how many days and hours it took.
+   - **Details**: owner (name, phone, special info), paint and what was done, address.
+   - **Days**: each day with Full/Half, its pay rate, the crew who worked, and optional notes on what each person did.
+   - **Photos**: tap ★ to pick the cover photo.
+   - **Notes**: dated notes and other contacts.
+   - **Pay**: pay **by the day** (each day has its own rate) or **one price** for the whole job, plus what you've received and what's still owed.
+4. **Pay tab**: owed and received totals, and what's waiting on payment. Links to the **ledger** and the **report**.
+5. **Settings**: your employees (add, rename, remove), your usual **full-day and half-day rates** (they fill in automatically), and who the report is for.
+
+### Who worked (employees)
+On a day, tap **Edit crew**. A list of your employees appears: tick who worked, and, only if you want, tap **＋ note** to say what that person did. Notes are optional and never required.
+
+## The report for your boss
+Open **Pay → 📤 Report** (`report.html`). It lists each job worked with its address, the days (Full or Half), and what's earned, paid, and owed, with totals. Choose This month, Last month, All time, or Unpaid only. **Send** opens your phone's share sheet (text, WhatsApp, email). You can also copy it as text or print it to a PDF. Jobs from earlier that are still unpaid are listed at the bottom.
 
 ## The ledger (accountant view)
 Open `ledger.html` (the 📒 link on the Pay tab and on every job page). It's a clean, printable report with three views:

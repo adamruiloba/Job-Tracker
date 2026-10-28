@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6bff">
+<title>Work & Payment Report</title>
+<style>
+  :root { --bg:#f2f4f9; --card:#fff; --ink:#1b2130; --muted:#667085; --line:#e6e9f0; --field:#f6f7fb; --brand:#2f6bff; --brand-soft:#e7eeff; --good:#117a57; --good-soft:#dcf4ea; --warn:#a85a05; --warn-soft:#fff0d9; --shadow:0 1px 2px rgba(20,30,60,.05), 0 8px 22px rgba(20,30,60,.06); }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1218; --card:#181d26; --ink:#eef1f6; --muted:#9aa3b2; --line:#283040; --field:#10141b; --brand:#6b95ff; --brand-soft:#1b2744; --good:#4ade9f; --good-soft:#12342a; --warn:#fbbf4a; --warn-soft:#3a2b10; --shadow:0 1px 2px rgba(0,0,0,.4); } }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:14px 16px 60px; }
+  a { color:var(--brand); text-decoration:none; }
+  button { font:inherit; font-weight:600; border:0; background:var(--field); color:var(--ink); border-radius:12px; padding:11px 16px; cursor:pointer; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  button.primary { background:var(--brand); color:#fff; } button.on { background:var(--ink); color:var(--card); }
+  button.small { padding:7px 12px; min-height:36px; font-size:14px; border-radius:10px; }
+  input[type=date] { font:inherit; color:var(--ink); background:var(--field); border:2px solid transparent; border-radius:10px; padding:8px 10px; }
+  .top { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:24px; margin:10px 0 2px; letter-spacing:-.3px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .card { background:var(--card); border-radius:18px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  .controls button { background:var(--card); box-shadow:var(--shadow); color:var(--muted); }
+  .controls button.on { background:var(--ink); color:var(--card); }
+  .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0; }
+  .tile { background:var(--card); border-radius:16px; padding:12px 14px; box-shadow:var(--shadow); }
+  .tile .k { font-size:12px; color:var(--muted); font-weight:600; } .tile .v { font-size:21px; font-weight:800; letter-spacing:-.4px; margin-top:2px; }
+  .paid { color:var(--good); } .owed { color:var(--warn); }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin:22px 4px 8px; font-weight:700; }
+  .job h3 { margin:0; font-size:18px; line-height:1.25; }
+  .days { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+  .d { font-size:13px; font-weight:700; padding:4px 10px; border-radius:99px; background:var(--brand-soft); color:var(--brand); white-space:nowrap; }
+  .d.half { background:var(--warn-soft); color:var(--warn); }
+  .money3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding-top:10px; border-top:1px solid var(--line); }
+  .money3 .k { font-size:12px; color:var(--muted); font-weight:600; } .money3 .v { font-size:18px; font-weight:800; }
+  .badge { font-size:12px; font-weight:700; padding:3px 9px; border-radius:99px; background:var(--good-soft); color:var(--good); white-space:nowrap; }
+  .badge.o { background:var(--warn-soft); color:var(--warn); }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .total { background:var(--ink); color:var(--card); border-radius:18px; padding:16px; margin-top:14px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .total .k { font-size:12px; opacity:.75; font-weight:600; } .total .v { font-size:20px; font-weight:800; }
+  .empty { text-align:center; color:var(--muted); padding:30px 12px; }
+  @media print { .noprint { display:none !important; } body { background:#fff; color:#000; } .card, .tile { box-shadow:none; border:1px solid #ddd; } .total { background:#fff; color:#000; border:2px solid #000; } .wrap { max-width:none; padding:0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top noprint"><a href="./">← Job Tracker</a><a href="ledger.html">Ledger</a></div>
+  <h1 id="ttl">Work & payment report</h1>
+  <div class="muted" id="sub"></div>
+
+  <div class="controls noprint">
+    <button data-p="month">This month</button><button data-p="last">Last month</button><button data-p="all">All time</button><button data-p="owed">Unpaid only</button>
+  </div>
+  <details class="noprint" style="margin-bottom:6px"><summary class="muted" style="cursor:pointer">Custom dates</summary><div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><input type="date" id="from"> to <input type="date" id="to"></div></details>
+
+  <div class="tiles" id="tiles"></div>
+  <div id="jobs"></div>
+  <div class="total" id="total"></div>
+
+  <div class="controls noprint" style="margin-top:18px">
+    <button class="primary" id="share">📤 Send</button><button id="copy">📋 Copy text</button><button id="print">🖨 Print / PDF</button>
+  </div>
+  <div class="muted noprint">“Send” opens your phone's share sheet (text message, WhatsApp, email…). “Print / PDF” lets you save it as a PDF.</div>
+</div>
+
+<script>
+"use strict";
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let state = { sites: [], visits: [], settings: {} };
+try { const s = JSON.parse(localStorage.getItem("painterJobs.v2")); if (s) state = s; } catch {}
+const st = state.settings || {}, live = o => !o.deleted, num = x => Number(x) || 0;
+const money = n => num(n).toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const D = s => new Date(s.slice(0, 10) + "T12:00:00");
+const fmt = s => D(s).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const fmtY = s => D(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const dayOf = s => (s || "").slice(0, 10);
+const pad = n => String(n).padStart(2, "0"), ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const street = a => String(a || "").split(",")[0].trim(), rest = a => String(a || "").split(",").slice(1).join(",").trim();
+
+/* jobs with their days, whole-job figures */
+const days = state.visits.filter(v => live(v) && v.end);
+const jobs = state.sites.filter(live).map(s => {
+  const es = state.visits.filter(v => live(v) && v.siteId === s.id).sort((a, b) => a.start.localeCompare(b.start));
+  const total = s.payMode === "flat" ? num(s.pay) : es.reduce((t, v) => t + num(v.rate), 0), paid = num(s.paidAmount);
+  return { s, es, total, paid, owed: Math.max(0, total - paid), last: es.length ? dayOf(es[es.length - 1].start) : "" };
+}).filter(j => j.es.length || j.total);
+
+let from = "", to = "", onlyOwed = false, preset = "month", rows = [], earlier = [];
+function setPreset(p) {
+  const n = new Date(); preset = p; onlyOwed = false;
+  if (p === "all") { from = to = ""; }
+  if (p === "month") { from = ymd(new Date(n.getFullYear(), n.getMonth(), 1)); to = ymd(new Date(n.getFullYear(), n.getMonth() + 1, 0)); }
+  if (p === "last") { from = ymd(new Date(n.getFullYear(), n.getMonth() - 1, 1)); to = ymd(new Date(n.getFullYear(), n.getMonth(), 0)); }
+  if (p === "owed") { from = to = ""; onlyOwed = true; }
+  $("#from").value = from; $("#to").value = to; draw();
+}
+const inRange = d => (!from || d >= from) && (!to || d <= to);
+const dayChips = j => j.es.map(v => `<span class="d ${v.dayType === "half" ? "half" : ""}">${fmt(v.start)} · ${v.dayType === "half" ? "Half" : "Full"}</span>`).join("");
+
+function jobHtml(j) {
+  const status = j.total && !j.owed ? `<span class="badge">✓ Paid in full</span>` : j.s.done ? `<span class="badge" style="background:var(--field);color:var(--muted)">Finished</span>` : "";
+  return `<div class="card job"><div class="row"><div><h3>${esc(street(j.s.address))}</h3><div class="muted">${esc(rest(j.s.address))}</div></div>${status}</div>
+    <div class="days">${dayChips(j) || `<span class="muted">No days logged</span>`}</div>
+    <div class="money3"><div><div class="k">Earned</div><div class="v">${money(j.total)}</div></div><div><div class="k">Paid</div><div class="v paid">${money(j.paid)}</div></div><div><div class="k">Owed</div><div class="v ${j.owed ? "owed" : ""}">${money(j.owed)}</div></div></div></div>`;
+}
+function draw() {
+  const worked = jobs.filter(j => j.es.some(v => inRange(dayOf(v.start))) && (!onlyOwed || j.owed > 0)).sort((a, b) => b.last.localeCompare(a.last));
+  const ids = new Set(worked.map(j => j.s.id));
+  earlier = (preset === "all" || onlyOwed) ? [] : jobs.filter(j => !ids.has(j.s.id) && j.owed > 0).sort((a, b) => b.last.localeCompare(a.last));
+  rows = worked;
+  const all = [...worked, ...earlier], T = all.reduce((t, j) => ({ e: t.e + j.total, p: t.p + j.paid, o: t.o + j.owed }), { e: 0, p: 0, o: 0 });
+  const nDays = worked.reduce((t, j) => t + j.es.filter(v => inRange(dayOf(v.start))).length, 0);
+  const who = [st.myName, st.bossName ? "for " + st.bossName : ""].filter(Boolean).join(" ");
+  $("#ttl").textContent = "Work & payment report"; $("#sub").textContent = [who, periodLabel()].filter(Boolean).join(" · ");
+  $("#tiles").innerHTML = [["Jobs", worked.length], ["Days worked", nDays], ["Still owed", money(T.o)]].map(([k, v], i) => `<div class="tile"><div class="k">${k}</div><div class="v ${i === 2 ? "owed" : ""}">${v}</div></div>`).join("");
+  $("#jobs").innerHTML = (worked.length ? `<h2>${onlyOwed ? "Unpaid jobs" : "Jobs worked"}</h2>` + worked.map(jobHtml).join("") : `<div class="empty">No jobs in this period.</div>`)
+    + (earlier.length ? `<h2>Earlier jobs still owed</h2>` + earlier.map(jobHtml).join("") : "");
+  $("#total").innerHTML = [["Total earned", T.e], ["Total paid", T.p], ["Total owed", T.o]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${money(v)}</div></div>`).join("");
+  document.querySelectorAll(".controls [data-p]").forEach(b => b.classList.toggle("on", b.dataset.p === preset));
+  report = { worked, earlier, T };
+}
+function periodLabel() { return onlyOwed ? "Unpaid jobs" : !from && !to ? "All time" : `${from ? fmtY(from) : "Start"} – ${to ? fmtY(to) : "today"}`; }
+let report = null;
+function text() {
+  const { worked, earlier, T } = report, line = j => `${street(j.s.address)}${rest(j.s.address) ? ", " + rest(j.s.address) : ""}\n  Days: ${j.es.map(v => `${fmt(v.start)} (${v.dayType === "half" ? "half" : "full"})`).join(", ") || "none"}\n  Earned ${money(j.total)} · Paid ${money(j.paid)} · Owed ${money(j.owed)}`;
+  const head = `Work summary${st.myName ? " — " + st.myName : ""}${st.bossName ? " (for " + st.bossName + ")" : ""}\n${periodLabel()}`;
+  return [head, "", ...worked.map(line), ...(earlier.length ? ["", "Earlier jobs still owed:", ...earlier.map(line)] : []), "", `TOTAL — Earned ${money(T.e)} · Paid ${money(T.p)} · Owed ${money(T.o)}`].join("\n");
+}
+document.querySelectorAll(".controls [data-p]").forEach(b => b.onclick = () => setPreset(b.dataset.p));
+$("#from").onchange = e => { from = e.target.value; preset = ""; onlyOwed = false; draw(); };
+$("#to").onchange = e => { to = e.target.value; preset = ""; onlyOwed = false; draw(); };
+$("#print").onclick = () => window.print();
+$("#copy").onclick = async () => { try { await navigator.clipboard.writeText(text()); $("#copy").textContent = "✓ Copied"; } catch { prompt("Copy this text:", text()); } setTimeout(() => $("#copy").textContent = "📋 Copy text", 1800); };
+$("#share").onclick = async () => {
+  if (navigator.share) { try { await navigator.share({ title: "Work summary", text: text() }); } catch {} }
+  else { try { await navigator.clipboard.writeText(text()); $("#share").textContent = "✓ Copied — paste it in a message"; } catch { prompt("Copy this text:", text()); } setTimeout(() => $("#share").textContent = "📤 Send", 2400); }
+};
+setPreset("month");
+</script>
+</body>
+</html>
