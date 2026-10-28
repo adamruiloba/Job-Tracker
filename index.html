@@ -83,6 +83,7 @@
   .banner .b-sub { opacity:.92; font-size:14px; text-shadow:0 1px 6px rgba(0,0,0,.45); }
   .banner .b-chips { position:absolute; top:12px; left:12px; display:flex; gap:6px; flex-wrap:wrap; max-width:60%; }
   .banner .b-cam { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.5); color:#fff; border-radius:99px; padding:7px 13px; font-size:13px; font-weight:700; cursor:pointer; }
+  .pslot { aspect-ratio:1; border-radius:16px; background-color:hsl(var(--h) var(--tile-s) var(--tile-l)); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; font-size:36px; cursor:pointer; }
   .acts { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
   .act { flex-direction:column; gap:3px; padding:11px 2px; min-height:66px; font-size:12.5px; background:var(--card); box-shadow:var(--shadow); border-radius:16px; color:var(--ink); }
   .act .ic { font-size:22px; line-height:1; }
@@ -236,8 +237,8 @@ const avatar = (n, big) => `<span class="av${big ? " big" : ""}" style="backgrou
    people   = your employees: {id,name}
    tasks    = optional "what this person did" note for one day: {id: visitId:personId, visitId,siteId,personId,text} */
 const LS = "painterJobs.v2";
-const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks"];
-let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], settings: { clientId: "", sheetId: "", fullRate: "", halfRate: "", myName: "", bossName: "Ignacio" } };
+const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks", "paints"];
+let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], settings: { clientId: "", sheetId: "", fullRate: "", halfRate: "", myName: "", bossName: "Ignacio" } };
 function load() {
   const def = state.settings;
   try { const s = JSON.parse(localStorage.getItem(LS)); if (s) state = { ...state, ...s, settings: { ...def, ...s.settings } }; } catch {}
@@ -275,7 +276,7 @@ function resizeImage(file, max=1600) {
 let redirects = {};
 function absorb(keep, dup) {
   state.visits.forEach(v => { if (v.siteId === dup.id) { v.siteId = keep.id; touch(v); } });
-  for (const k of ["photos", "notes", "contacts", "tasks"]) state[k].forEach(o => { if (o.siteId === dup.id) { o.siteId = keep.id; touch(o); } });
+  for (const k of ["photos", "notes", "contacts", "tasks", "paints"]) state[k].forEach(o => { if (o.siteId === dup.id) { o.siteId = keep.id; touch(o); } });
   if (!(Number(keep.pay) > 0) && Number(dup.pay) > 0) { keep.pay = dup.pay; if (!entriesOf(keep).some(v => Number(v.rate) > 0)) keep.payMode = "flat"; }
   keep.paidAmount = (Number(keep.paidAmount) || 0) + (Number(dup.paidAmount) || 0) || "";
   if (dup.paidDate && (!keep.paidDate || dup.paidDate > keep.paidDate)) keep.paidDate = dup.paidDate;
@@ -329,7 +330,11 @@ const jobs = () => state.sites.filter(live);
 const jobById = id => state.sites.find(s => s.id === id && live(s));
 const entries = () => state.visits.filter(live);
 const entriesOf = s => entries().filter(v => v.siteId === s.id).sort((a, b) => a.start.localeCompare(b.start));
-const photosOf = s => state.photos.filter(p => live(p) && p.siteId === s.id);
+const photosOf = s => state.photos.filter(p => live(p) && p.siteId === s.id && p.kind !== "paint"); // paint-bucket photos live in the Paints tab, not the house gallery
+const paintsOf = s => state.paints.filter(o => live(o) && o.siteId === s.id).sort((a, b) => a.id.localeCompare(b.id));
+const areasOf = p => String(p.areas || "").split("|").map(x => x.trim()).filter(Boolean);
+const paintName = p => [p.brand, p.product].filter(Boolean).join(" ") || "Paint";
+const paintColor = p => [p.colorCode, p.colorName].filter(Boolean).join(" · ");
 const notesOf = s => state.notes.filter(n => live(n) && n.siteId === s.id).sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
 const contactsOf = s => state.contacts.filter(c => live(c) && c.siteId === s.id);
 const people = () => state.people.filter(live).sort((a, b) => a.name.localeCompare(b.name));
@@ -403,12 +408,19 @@ async function fillThumbs(root) {
     el.style.backgroundImage = `url("${url}")`; el.classList.add("has");
   }
 }
+async function fillPaintPhotos(root) {
+  for (const el of root.querySelectorAll("[data-pphoto]")) {
+    const p = state.photos.find(x => x.id === el.dataset.pphoto && live(x)); if (!p) continue;
+    const url = await photoUrl(p); if (!url || !el.isConnected) continue;
+    el.style.backgroundImage = `url("${url}")`; el.classList.add("has"); el.dataset.url = url;
+  }
+}
 const thumb = (s, cls = "") => `<div class="thumb ${cls}" data-thumb="${s.id}" style="--h:${hue(s.address)}"><span>🏠</span></div>`;
 
 /* ---------- search: name, phone, address, notes, crew... ---------- */
 function searchMatch(s, q) {
   const es = entriesOf(s), contacts = contactsOf(s);
-  const parts = [s.address, ownerName(s), s.ownerPhone, s.ownerInfo, s.paint, s.work, ...contacts.flatMap(c => [c.name, c.role, c.phone]), ...notesOf(s).map(n => n.text), ...es.flatMap(v => [v.notes, ...crewNames(v), ...tasksOf(v).map(t => t.text)])];
+  const parts = [s.address, ownerName(s), s.ownerPhone, s.ownerInfo, s.paint, s.work, ...contacts.flatMap(c => [c.name, c.role, c.phone]), ...paintsOf(s).flatMap(x => [x.brand, x.product, x.colorName, x.colorCode, x.sheen, x.areas, x.notes]), ...notesOf(s).map(n => n.text), ...es.flatMap(v => [v.notes, ...crewNames(v), ...tasksOf(v).map(t => t.text)])];
   const hay = normAddr(parts.join(" ")), phones = [s.ownerPhone, ...contacts.map(c => c.phone)].map(digits).filter(Boolean);
   const qd = digits(q);
   if (qd.length >= 3 && phones.some(p => p.includes(qd))) return true;
@@ -436,23 +448,23 @@ function setDayType(v, type, onlyIfDefault, was) {
 }
 
 /* ---------- navigation ---------- */
-let tab = "clock", openJob = null, openEntry = null, jobTab = "details", q = "", dateQ = "", jobFilter = "all", timerHandle = null;
+let tab = "clock", openJob = null, openEntry = null, openPaint = null, jobTab = "details", q = "", dateQ = "", jobFilter = "all", timerHandle = null;
 let calMonth = todayStr().slice(0, 7), calSel = todayStr(), calView = "month";
 const TITLES = { clock: "Clock", calendar: "Calendar", pay: "Pay", settings: "Settings" };
 function render() {
   clearInterval(timerHandle);
   if (openJob && redirects[openJob]) openJob = redirects[openJob];
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-  $("#title").textContent = tab === "jobs" ? (openJob ? (openEntry ? "Day" : "Job") : "Jobs") : TITLES[tab];
+  $("#title").textContent = tab === "jobs" ? (openJob ? (openPaint ? "Paint" : openEntry ? "Day" : "Job") : "Jobs") : TITLES[tab];
   const app = $("#app");
   if (tab === "clock") viewClock(app);
   else if (tab === "calendar") viewCalendar(app);
-  else if (tab === "jobs") openJob ? (openEntry ? viewEntry(app) : viewJob(app)) : viewJobs(app);
+  else if (tab === "jobs") openJob ? (openPaint ? viewPaint(app) : openEntry ? viewEntry(app) : viewJob(app)) : viewJobs(app);
   else if (tab === "pay") viewPay(app);
   else viewSettings(app);
-  syncLabel(); fillThumbs(app);
+  syncLabel(); fillThumbs(app); fillPaintPhotos(app);
 }
-const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; if (t) jobTab = t; render(); window.scrollTo(0, 0); };
+const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; openPaint = null; if (t) jobTab = t; render(); window.scrollTo(0, 0); };
 
 /* ---------- crew sheet: tick who worked, optionally say what they did ---------- */
 function openCrewSheet(v, done) {
@@ -644,11 +656,11 @@ function viewJobs(app) {
 }
 
 /* ---------- Job page: the profile ---------- */
-const JOBTABS = [["details", "📋", "Details"], ["days", "📆", "Days"], ["photos", "📷", "Photos"], ["notes", "📝", "Notes"], ["pay", "💵", "Pay"]];
+const JOBTABS = [["details", "📋", "Details"], ["days", "📆", "Days"], ["photos", "📷", "Photos"], ["paints", "🎨", "Paints"], ["notes", "📝", "Notes"], ["pay", "💵", "Pay"]];
 function viewJob(app) {
   const s = jobById(openJob);
   if (!s) { openJob = null; return render(); }
-  const st = stats(s), act = activeEntry(), ps = payStatus(s), badge = { photos: photosOf(s).length, notes: notesOf(s).length + contactsOf(s).length, days: st.days };
+  const st = stats(s), act = activeEntry(), ps = payStatus(s), badge = { paints: paintsOf(s).length, photos: photosOf(s).length, notes: notesOf(s).length + contactsOf(s).length, days: st.days };
   const statChip = st.active ? `<span class="chip live">● In progress</span>` : s.done ? `<span class="chip done">✓ Finished</span>` : `<span class="chip open">Open</span>`;
   const hasPhone = !!digits(s.ownerPhone);
   app.innerHTML = `
@@ -673,7 +685,7 @@ function viewJob(app) {
   if ($("#j-nophone")) $("#j-nophone").onclick = () => { jobTab = "details"; render(); toast("Add the owner's phone number here"); };
   $("#j-done").onclick = () => { s.done = s.done ? "" : todayStr(); touch(s); save(); toast(s.done ? "Job marked finished" : "Job reopened"); render(); };
   $("#cover-in").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", deleted: false })); s.cover = id; touch(s); save(); toast("House photo saved"); render(); } catch { toast("That file isn't a photo"); } };
-  ({ details: tabDetails, days: tabDays, photos: tabPhotos, notes: tabNotes, pay: tabPay })[jobTab]($("#jt"), s, st);
+  ({ details: tabDetails, days: tabDays, photos: tabPhotos, paints: tabPaints, notes: tabNotes, pay: tabPay })[jobTab]($("#jt"), s, st);
 }
 
 function tabDetails(box, s) {
@@ -683,10 +695,7 @@ function tabDetails(box, s) {
       <label>Phone</label><input id="o-phone" type="tel" inputmode="tel" value="${esc(s.ownerPhone)}" placeholder="(555) 123-4567">
       <label>Special info</label><textarea id="o-info" style="min-height:80px" placeholder="Gate code, pets, best time to call, preferences…">${esc(s.ownerInfo)}</textarea>
       <div class="actions"><button class="primary" id="o-save">Save contact</button>${digits(s.ownerPhone) ? `<a class="btn soft" href="sms:${digits(s.ownerPhone)}">💬 Text</a>` : ""}</div></div>
-    <div class="card"><h3>🎨 Paint & work</h3>
-      <label style="margin-top:0">Paint & materials used</label>
-      <textarea id="j-paint" style="min-height:76px" placeholder="e.g. Sherwin-Williams Duration, Alabaster, 3 gal walls + 1 gal trim">${esc(s.paint)}</textarea>
-      <label>What was done</label>
+    <div class="card"><h3>🛠 What was done</h3>
       <textarea id="j-work" placeholder="e.g. Prepped & primed living room, 2 coats walls, trim and doors, patched 6 holes">${esc(s.work)}</textarea>
       <div class="actions"><button class="primary" id="j-notes-save">Save</button></div></div>
     <div class="card"><h3>🏠 Job address</h3>
@@ -700,7 +709,7 @@ function tabDetails(box, s) {
     toast(jobs().length < before ? "Merged with the job that already has this address" : "Address saved"); render();
   };
   $("#o-save").onclick = () => { Object.assign(s, { ownerFirst: $("#o-first").value.trim(), ownerLast: $("#o-last").value.trim(), ownerPhone: $("#o-phone").value.trim(), ownerInfo: $("#o-info").value }); touch(s); save(); toast("Contact saved"); render(); };
-  $("#j-notes-save").onclick = () => { s.paint = $("#j-paint").value; s.work = $("#j-work").value; touch(s); save(); toast("Saved"); };
+  $("#j-notes-save").onclick = () => { s.work = $("#j-work").value; touch(s); save(); toast("Saved"); };
   $("#j-merge").onclick = () => {
     const others = jobs().filter(x => x.id !== s.id).sort((a, b) => a.address.localeCompare(b.address)), mb = $("#merge-box");
     if (!others.length) return toast("There's no other job to merge");
@@ -717,7 +726,7 @@ function tabDetails(box, s) {
   $("#j-del").onclick = () => {
     if (!confirm("Delete this job and everything in it (days, notes, contacts, photo list)?")) return;
     entriesOf(s).forEach(v => touch(Object.assign(v, { deleted: true })));
-    for (const k of ["photos", "notes", "contacts", "tasks"]) state[k].filter(o => o.siteId === s.id).forEach(o => touch(Object.assign(o, { deleted: true })));
+    for (const k of ["photos", "notes", "contacts", "tasks", "paints"]) state[k].filter(o => o.siteId === s.id).forEach(o => touch(Object.assign(o, { deleted: true })));
     touch(Object.assign(s, { deleted: true })); save(); openJob = null; render();
   };
 }
@@ -739,7 +748,7 @@ function tabDays(box, s, st) {
 
 function tabPhotos(box, s) {
   box.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">📷 Photos</h3><label style="margin:0"><span class="btn primary small">＋ Add photos</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label></div>
-    <div class="muted" style="margin-top:6px">Tap ★ on a photo to make it the job's cover picture.</div>
+    <div class="muted" style="margin-top:6px">Tap ★ on a photo to make it the job's cover picture. Paint bucket photos go in the 🎨 Paints tab.</div>
     <div class="photos" id="photos"></div>${photosOf(s).length ? "" : `<div class="empty"><span class="big-emoji">🖼</span>No photos yet.</div>`}</div>`;
   $("#ph-in").onchange = async e => {
     let n = 0;
@@ -809,6 +818,81 @@ function tabPay(box, s, st) {
   if ($("#j-full")) $("#j-full").onclick = () => { if (!(jobTotal(s) > 0)) return toast("Set the pay first"); setPaid(jobTotal(s)); };
   $("#j-part").onclick = () => { const a = parseFloat(prompt("Total amount received so far ($):", paidOf(s) || owedOf(s) || "")); if (a >= 0) setPaid(a); };
   if ($("#j-unpay")) $("#j-unpay").onclick = () => setPaid("");
+}
+
+/* ---------- Paints: a ledger of what paint was used where ---------- */
+const SURFACES = ["Walls", "Ceiling", "Trim", "Doors", "Cabinets", "Exterior walls", "Fascia / eaves", "Garage", "Deck / fence"];
+const ROOMS = ["Master bedroom", "Bedroom", "Living room", "Kitchen", "Bathroom", "Laundry room", "Hallway", "Entry", "Dining room", "Office"];
+const BRANDS = ["Sherwin-Williams", "Behr", "Benjamin Moore", "Dunn-Edwards", "Kelly-Moore", "Valspar", "PPG", "Glidden", "Vista", "Frazee", "Kilz", "Zinsser"];
+const PRODUCTS = ["Duration", "SuperPaint", "ProClassic", "Emerald", "Ultra", "Marquee", "Regal Select", "Aura", "Cashmere", "Primer", "Ceiling paint"];
+const SHEENS = ["Flat", "Matte", "Eggshell", "Satin", "Semi-gloss", "Gloss"];
+const paintCard = p => `<div class="card tap" data-paint="${p.id}"><div class="row top" style="gap:12px">
+  <div class="thumb sm" data-pphoto="${p.photoFront || p.photoTop || ""}" style="--h:${hue(p.brand || "paint")}"><span>🎨</span></div>
+  <div class="grow"><div class="street">${esc(paintName(p))}</div><div>${paintColor(p) ? esc(paintColor(p)) : `<span class="muted">No color yet</span>`}</div>
+    <div class="muted">${[p.sheen, p.size].filter(Boolean).map(esc).join(" · ")}</div>
+    ${areasOf(p).length ? `<div class="jc-meta">${areasOf(p).map(a => `<span class="chip full">${esc(a)}</span>`).join("")}</div>` : ""}</div></div></div>`;
+function tabPaints(box, s) {
+  const ps = paintsOf(s), byArea = new Map();
+  ps.forEach(p => { const as = areasOf(p); (as.length ? as : ["Not assigned yet"]).forEach(a => (byArea.get(a) || byArea.set(a, []).get(a)).push(p)); });
+  box.innerHTML = `
+    <div class="row" style="margin:0 4px 10px"><h2 style="margin:0">Paints used</h2><button class="small primary" id="pt-add">＋ Add paint</button></div>
+    ${ps.length ? ps.map(paintCard).join("") : `<div class="empty"><span class="big-emoji">🎨</span>No paints yet.<br>Tap “Add paint”, take a photo of the bucket and the lid, then type what the lid says.</div>`}
+    ${byArea.size ? `<div class="card"><h3>📋 What was used where</h3>${[...byArea.entries()].map(([a, list]) => `<div class="line" style="align-items:flex-start"><strong>${esc(a)}</strong><span style="text-align:right">${list.map(p => `<div>${esc(paintColor(p) || paintName(p))}${p.sheen ? ` <span class="muted">${esc(p.sheen)}</span>` : ""}</div>`).join("")}</span></div>`).join("")}</div>` : ""}
+    <div class="card"><h3>📝 Other paint notes</h3><textarea id="j-paint" style="min-height:70px" placeholder="Anything else: primer, caulk, tape, how much was left over…">${esc(s.paint)}</textarea>
+      <div class="actions"><button class="primary small" id="pt-notes">Save</button></div></div>`;
+  $("#pt-add").onclick = () => { const p = touch({ id: uid(), siteId: s.id, brand: "", product: "", colorCode: "", colorName: "", sheen: "", size: "", areas: "", photoFront: "", photoTop: "", notes: "", deleted: false }); state.paints.push(p); save(); openPaint = p.id; render(); window.scrollTo(0, 0); };
+  box.querySelectorAll("[data-paint]").forEach(c => c.onclick = () => { openPaint = c.dataset.paint; render(); window.scrollTo(0, 0); });
+  $("#pt-notes").onclick = () => { s.paint = $("#j-paint").value; touch(s); save(); toast("Saved"); };
+}
+function viewPaint(app) {
+  const p = state.paints.find(x => x.id === openPaint && live(x)), s = p && jobById(p.siteId);
+  if (!p || !s) { openPaint = null; return render(); }
+  let areas = areasOf(p);
+  const uniq = k => [...new Set([...state.paints.filter(live).map(x => x[k]).filter(Boolean)])];
+  const slot = (key, label) => { const pid = p[key]; return `<div><div class="muted" style="font-weight:700;margin-bottom:6px">${label}</div>
+    <div class="pslot" data-slot="${key}" data-pphoto="${pid}" style="--h:${hue(key)}"><span>📷</span></div>
+    <div class="row" style="gap:6px;margin-top:6px"><label class="btn soft small grow">📷 Take<input type="file" accept="image/*" capture="environment" data-file="${key}" style="display:none"></label><label class="btn small grow">🖼 Choose<input type="file" accept="image/*" data-file="${key}" style="display:none"></label></div>
+    ${pid ? `<button class="small danger block" data-rm="${key}" style="margin-top:6px">Remove photo</button>` : ""}</div>`; };
+  app.innerHTML = `
+    <button class="small" id="back">← Paints · ${esc(streetOf(s.address))}</button>
+    <div class="card" style="margin-top:10px"><h3>📷 Photos of the bucket</h3>
+      <div class="two">${slot("photoFront", "Front of bucket")}${slot("photoTop", "Top of lid (code)")}</div>
+      <div class="muted" style="margin-top:8px">Tap a photo to enlarge it, then type what the lid says below.</div></div>
+    <div class="card"><h3>🎨 Paint details</h3>
+      <div class="two"><div><label style="margin-top:0">Brand</label><input id="pf-brand" list="dl-brand" value="${esc(p.brand)}" autocapitalize="words" autocomplete="off"></div><div><label style="margin-top:0">Product</label><input id="pf-product" list="dl-product" value="${esc(p.product)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Duration"></div></div>
+      <div class="two"><div><label>Color code</label><input id="pf-code" value="${esc(p.colorCode)}" autocapitalize="characters" autocomplete="off" placeholder="e.g. SW 7008"></div><div><label>Color name</label><input id="pf-cname" value="${esc(p.colorName)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Alabaster"></div></div>
+      <div class="two"><div><label>Sheen</label><select id="pf-sheen"><option value="">—</option>${SHEENS.map(x => `<option ${p.sheen === x ? "selected" : ""}>${x}</option>`).join("")}</select></div><div><label>Size / amount</label><input id="pf-size" value="${esc(p.size)}" autocomplete="off" placeholder="e.g. 5 gal"></div></div>
+      <datalist id="dl-brand">${[...new Set([...uniq("brand"), ...BRANDS])].map(x => `<option value="${esc(x)}">`).join("")}</datalist><datalist id="dl-product">${[...new Set([...uniq("product"), ...PRODUCTS])].map(x => `<option value="${esc(x)}">`).join("")}</datalist></div>
+    <div class="card"><h3>📍 Used for</h3><div class="muted">Tap to choose, or type your own.</div><div id="pf-areas"></div></div>
+    <div class="card"><h3>📝 Notes (optional)</h3><textarea id="pf-notes" style="min-height:70px" placeholder="Tinted at the store, thinned, 2 coats…">${esc(p.notes)}</textarea>
+      <div class="actions"><button class="primary" id="pf-save">Save paint</button><button class="danger" id="pf-del">Delete paint</button></div></div>`;
+  const readForm = () => { Object.assign(p, { brand: $("#pf-brand").value.trim(), product: $("#pf-product").value.trim(), colorCode: $("#pf-code").value.trim(), colorName: $("#pf-cname").value.trim(), sheen: $("#pf-sheen").value, size: $("#pf-size").value.trim(), notes: $("#pf-notes").value, areas: areas.join(" | ") }); touch(p); };
+  const isEmpty = () => !(p.brand || p.product || p.colorCode || p.colorName || p.sheen || p.size || p.notes || p.areas || p.photoFront || p.photoTop);
+  const close = () => { readForm(); if (isEmpty()) p.deleted = true; save(); openPaint = null; jobTab = "paints"; render(); };
+  const drawAreas = () => {
+    const recent = uniq("areas").flatMap(x => x.split("|").map(y => y.trim())).filter(Boolean), sug = [...new Set([...recent, ...SURFACES, ...ROOMS])].filter(a => !areas.includes(a));
+    $("#pf-areas").innerHTML = `<div class="crewchips" style="margin-top:10px">${areas.map(a => `<button class="on" data-ar="${esc(a)}">${esc(a)} ✕</button>`).join("") || `<span class="muted">Nothing chosen yet</span>`}</div>
+      <div class="row" style="margin-top:10px"><input id="pf-newarea" placeholder="Type your own, e.g. Guest bath" autocapitalize="words" autocomplete="off"><button class="soft" id="pf-addarea">Add</button></div>
+      <div class="quick" style="margin-top:10px">${sug.map(a => `<button data-sg="${esc(a)}">＋ ${esc(a)}</button>`).join("")}</div>`;
+    $("#pf-areas").querySelectorAll("[data-ar]").forEach(b => b.onclick = () => { areas = areas.filter(x => x !== b.dataset.ar); drawAreas(); });
+    $("#pf-areas").querySelectorAll("[data-sg]").forEach(b => b.onclick = () => { areas.push(b.dataset.sg); drawAreas(); });
+    const add = () => { const v = $("#pf-newarea").value.trim(); if (v && !areas.includes(v)) { areas.push(v); drawAreas(); $("#pf-newarea").focus(); } };
+    $("#pf-addarea").onclick = add; $("#pf-newarea").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); add(); } };
+  };
+  drawAreas();
+  $("#back").onclick = close;
+  $("#pf-save").onclick = () => { readForm(); save(); toast("Paint saved"); close(); };
+  $("#pf-del").onclick = () => { if (!confirm("Delete this paint?")) return; for (const k of ["photoFront", "photoTop"]) { const ph = state.photos.find(x => x.id === p[k]); if (ph) touch(Object.assign(ph, { deleted: true })); } touch(Object.assign(p, { deleted: true })); save(); openPaint = null; jobTab = "paints"; render(); };
+  app.querySelectorAll("[data-file]").forEach(inp => inp.onchange = async e => {
+    const f = e.target.files[0], key = inp.dataset.file; if (!f) return; readForm();
+    try {
+      const blob = await resizeImage(f), id = uid(); await blobPut(id, blob);
+      const old = state.photos.find(x => x.id === p[key]); if (old) touch(Object.assign(old, { deleted: true }));
+      state.photos.push(touch({ id, siteId: p.siteId, taken: todayStr(), driveId: "", kind: "paint", deleted: false })); p[key] = id; touch(p); save(); render();
+    } catch { toast("That file isn't a photo"); }
+  });
+  app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { readForm(); const ph = state.photos.find(x => x.id === p[b.dataset.rm]); if (ph) touch(Object.assign(ph, { deleted: true })); p[b.dataset.rm] = ""; touch(p); save(); render(); });
+  app.querySelectorAll("[data-slot]").forEach(el => el.onclick = () => { if (!el.dataset.url) return; const m = document.createElement("div"); m.className = "modal"; m.innerHTML = `<img src="${el.dataset.url}" alt="">`; m.onclick = () => m.remove(); document.body.append(m); });
 }
 
 /* ---------- one day worked ---------- */
@@ -949,14 +1033,15 @@ const SHEET_NAME = "Painter Job Tracker";
 const COLS = {
   Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "lat", "lng", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
-  Photos: ["id", "siteId", "taken", "driveId", "visitId", "updated", "deleted"],
+  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "updated", "deleted"],
+  Paints: ["id", "siteId", "address", "brand", "product", "colorCode", "colorName", "sheen", "size", "areas", "photoFront", "photoTop", "notes", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
   Contacts: ["id", "siteId", "address", "name", "role", "phone", "updated", "deleted"],
   People: ["id", "name", "updated", "deleted"],
   CrewNotes: ["id", "visitId", "siteId", "address", "personId", "personName", "text", "updated", "deleted"],
 };
-const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks" };
-const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"] };
+const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints" };
+const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"] };
 const NUM = new Set(["lat", "lng", "pay", "paidAmount", "lastPay", "rate", "updated"]);
 function merge(local, remote) {
   const m = new Map(local.map(x => [x.id, x]));
@@ -1000,8 +1085,9 @@ async function uploadPendingPhotos(root) {
   for (const p of state.photos.filter(x => !x.driveId && !x.deleted)) {
     const rec = await blobGet(p.id); if (!rec) continue;
     const job = jobById(p.siteId); if (!job) continue;
-    const folder = await ensureFolder(job.address.replace(/[\/\\]/g, "-").slice(0, 100), root);
-    const boundary = "b" + uid(), meta = JSON.stringify({ name: `${p.taken || "photo"}-${p.id}.jpg`, parents: [folder] });
+    let folder = await ensureFolder(job.address.replace(/[\/\\]/g, "-").slice(0, 100), root);
+    if (p.kind === "paint") folder = await ensureFolder("Paints", folder);
+    const boundary = "b" + uid(), meta = JSON.stringify({ name: `${p.kind === "paint" ? "paint-" : ""}${p.taken || "photo"}-${p.id}.jpg`, parents: [folder] });
     const body = new Blob([`--${boundary}\r\nContent-Type: application/json\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`, rec.blob, `\r\n--${boundary}--`]);
     const out = await gfetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body });
     p.driveId = out.id; touch(p);
@@ -1037,7 +1123,7 @@ async function syncNow(quiet) {
 
 /* ---------- boot ---------- */
 $("#syncbtn").onclick = () => syncNow();
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.tab; if (tab === "jobs") { openJob = null; openEntry = null; } render(); window.scrollTo(0, 0); });
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.tab; if (tab === "jobs") { openJob = null; openEntry = null; openPaint = null; } render(); window.scrollTo(0, 0); });
 load(); render();
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 </script>

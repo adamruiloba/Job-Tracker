@@ -12,6 +12,7 @@ One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your
    - **Details**: owner (name, phone, special info), paint and what was done, address.
    - **Days**: each day with Full/Half, its pay rate, the crew who worked, and optional notes on what each person did.
    - **Photos**: tap ★ to pick the cover photo.
+   - **🎨 Paints**: a ledger of the paint used on the job. Tap **Add paint**, take a photo of the **front of the bucket** and the **top of the lid** (where the code is), then type the details from the lid: brand, product, color code and name, sheen, and size. Tap names to say **what it was used for** (walls, trim, doors, master bedroom, laundry room…) or type your own. The tab also shows **what was used where**, area by area. The Paints view in the ledger lists every paint across your jobs. (The app doesn't read the lid code from the photo; you type it in while the photo is right in front of you.)
    - **Notes**: dated notes and other contacts.
    - **Pay**: pay **by the day** (each day has its own rate) or **one price** for the whole job, plus what you've received and what's still owed.
 4. **Pay tab**: owed and received totals, and what's waiting on payment. Links to the **ledger** and the **report**.

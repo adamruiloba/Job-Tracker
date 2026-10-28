@@ -72,7 +72,7 @@
   </div>
 
   <div class="summary" id="summary"></div>
-  <div class="tabs"><button data-v="job">By job</button><button data-v="day">By day</button><button data-v="grid">Day × job grid</button></div>
+  <div class="tabs"><button data-v="job">By job</button><button data-v="day">By day</button><button data-v="grid">Grid</button><button data-v="paint">Paints</button></div>
   <div id="view"></div>
 </div>
 
@@ -131,7 +131,7 @@ function draw() {
     ["Jobs", js.length], ["Days worked", new Set(dayEs.map(v => dayOf(v.start))).size], ["Hours", h2(dayEs.reduce((t, v) => t + hrs(v), 0))],
     ["Job pay", m2(pay)], ["Received", m2(got)], ["Balance due", m2(pay - got)], ["Pay per hour", jh ? m2(js.filter(a => a.total > 0).reduce((t, a) => t + a.total, 0) / jh) : "—"],
   ].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
-  $("#view").innerHTML = ""; $("#view").append(view === "job" ? viewJob(js) : view === "day" ? viewDay(dayEs) : viewGrid());
+  $("#view").innerHTML = ""; $("#view").append(view === "job" ? viewJob(js) : view === "day" ? viewDay(dayEs) : view === "paint" ? viewPaints(js) : viewGrid());
 }
 
 function table(head, rows, opts = {}) {
@@ -179,6 +179,21 @@ function viewDay(es) {
     { note: "Pay is each day's rate. For jobs paid one flat price, the price is split across its days by hours worked, for reference only." });
 }
 
+/* PAINTS: what was used where */
+function viewPaints(js) {
+  const all = (state.paints || []).filter(live), rows = [];
+  for (const a of js) {
+    const ps = all.filter(p => p.siteId === a.s.id).sort((x, y) => x.id.localeCompare(y.id)); if (!ps.length) continue;
+    rows.push(`<tr class="month"><td class="first" colspan="3">${esc(a.s.address)}</td></tr>`);
+    for (const p of ps) {
+      const areas = String(p.areas || "").split("|").map(x => x.trim()).filter(Boolean), name = [p.brand, p.product].filter(Boolean).join(" ") || "Paint", color = [p.colorCode, p.colorName].filter(Boolean).join(" · ");
+      lastCsvRows.push([a.s.address, p.brand, p.product, p.colorCode, p.colorName, p.sheen, p.size, areas.join("; "), (p.notes || "").replace(/\s+/g, " ")]);
+      rows.push(`<tr><td class="first"><b>${esc(name)}</b>${color ? `<div>${esc(color)}</div>` : ""}</td><td>${esc([p.sheen, p.size].filter(Boolean).join(" · "))}</td><td>${areas.map(esc).join(", ") || "—"}</td></tr>`);
+    }
+  }
+  return table([["Paint"], ["Sheen · size"], ["Used for"]], rows, { note: "Every paint logged on these jobs, with where it was used." });
+}
+
 /* DAY × JOB GRID */
 function viewGrid() {
   const months = [...new Set(entries.map(v => dayOf(v.start).slice(0, 7)))].sort();
@@ -202,7 +217,7 @@ function wireGrid() { const g = $("#gm"); if (g) g.onchange = e => { gridMonth =
 
 /* CSV / events */
 let lastCsvRows = [], lastCsvHead = null;
-const HEADS = { job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
+const HEADS = { paint: ["Job", "Brand", "Product", "Color code", "Color name", "Sheen", "Size", "Used for", "Notes"],  job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
 const _draw = draw; draw = function () { lastCsvRows = []; lastCsvHead = null; _draw(); };
 function setView(v) { view = v; draw(); }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setView(b.dataset.v));
