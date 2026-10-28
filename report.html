@@ -54,7 +54,7 @@
   </div>
   <details class="noprint" style="margin-bottom:6px"><summary class="muted" style="cursor:pointer">Custom dates</summary><div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><input type="date" id="from"> to <input type="date" id="to"></div></details>
 
-  <div class="tiles" id="tiles"></div>
+  <div id="tiles" style="font-weight:700;margin:12px 2px 4px"></div>
   <div id="jobs"></div>
   <div class="total" id="total"></div>
 
@@ -97,7 +97,8 @@ function setPreset(p) {
   $("#from").value = from; $("#to").value = to; draw();
 }
 const inRange = d => (!from || d >= from) && (!to || d <= to);
-const dayChips = j => j.es.map(v => `<span class="d ${v.dayType === "half" ? "half" : ""}">${fmt(v.start)} · ${v.dayType === "half" ? "Half" : "Full"}</span>`).join("");
+const dayName = v => v.dayType === "half" ? "Half" : v.dayType === "custom" ? "Custom " + money(v.rate) : "Full";
+const dayChips = j => j.es.map(v => `<span class="d ${v.dayType === "half" ? "half" : ""}">${fmt(v.start)} · ${dayName(v)}</span>`).join("");
 
 function jobHtml(j) {
   const status = j.total && !j.owed ? `<span class="badge">✓ Paid in full</span>` : j.s.done ? `<span class="badge" style="background:var(--field);color:var(--muted)">Finished</span>` : "";
@@ -114,7 +115,7 @@ function draw() {
   const nDays = worked.reduce((t, j) => t + j.es.filter(v => inRange(dayOf(v.start))).length, 0);
   const who = [st.myName, st.bossName ? "for " + st.bossName : ""].filter(Boolean).join(" ");
   $("#ttl").textContent = "Work & payment report"; $("#sub").textContent = [who, periodLabel()].filter(Boolean).join(" · ");
-  $("#tiles").innerHTML = [["Jobs", worked.length], ["Days worked", nDays], ["Still owed", money(T.o)]].map(([k, v], i) => `<div class="tile"><div class="k">${k}</div><div class="v ${i === 2 ? "owed" : ""}">${v}</div></div>`).join("");
+  $("#tiles").innerHTML = `${worked.length} job${worked.length === 1 ? "" : "s"} · ${nDays} day${nDays === 1 ? "" : "s"} worked · <span class="owed">${money(T.o)} still owed</span>`;
   $("#jobs").innerHTML = (worked.length ? `<h2>${onlyOwed ? "Unpaid jobs" : "Jobs worked"}</h2>` + worked.map(jobHtml).join("") : `<div class="empty">No jobs in this period.</div>`)
     + (earlier.length ? `<h2>Earlier jobs still owed</h2>` + earlier.map(jobHtml).join("") : "");
   $("#total").innerHTML = [["Total earned", T.e], ["Total paid", T.p], ["Total owed", T.o]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${money(v)}</div></div>`).join("");
@@ -124,7 +125,7 @@ function draw() {
 function periodLabel() { return onlyOwed ? "Unpaid jobs" : !from && !to ? "All time" : `${from ? fmtY(from) : "Start"} – ${to ? fmtY(to) : "today"}`; }
 let report = null;
 function text() {
-  const { worked, earlier, T } = report, line = j => `${street(j.s.address)}${rest(j.s.address) ? ", " + rest(j.s.address) : ""}\n  Days: ${j.es.map(v => `${fmt(v.start)} (${v.dayType === "half" ? "half" : "full"})`).join(", ") || "none"}\n  Earned ${money(j.total)} · Paid ${money(j.paid)} · Owed ${money(j.owed)}`;
+  const { worked, earlier, T } = report, line = j => `${street(j.s.address)}${rest(j.s.address) ? ", " + rest(j.s.address) : ""}\n  Days: ${j.es.map(v => `${fmt(v.start)} (${v.dayType === "half" ? "half" : v.dayType === "custom" ? "custom " + money(v.rate) : "full"})`).join(", ") || "none"}\n  Earned ${money(j.total)} · Paid ${money(j.paid)} · Owed ${money(j.owed)}`;
   const head = `Work summary${st.myName ? " — " + st.myName : ""}${st.bossName ? " (for " + st.bossName + ")" : ""}\n${periodLabel()}`;
   return [head, "", ...worked.map(line), ...(earlier.length ? ["", "Earlier jobs still owed:", ...earlier.map(line)] : []), "", `TOTAL — Earned ${money(T.e)} · Paid ${money(T.p)} · Owed ${money(T.o)}`].join("\n");
 }

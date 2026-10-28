@@ -61,7 +61,7 @@
   .chip { font-size:12.5px; font-weight:700; padding:4px 10px; border-radius:99px; background:var(--field); color:var(--muted); white-space:nowrap; display:inline-flex; align-items:center; gap:4px; border:0; min-height:0; }
   .chip.live { background:var(--brand-soft); color:var(--brand); } .chip.done { background:var(--good-soft); color:var(--good); } .chip.open { background:var(--warn-soft); color:var(--warn); }
   .chip.paid { background:var(--good-soft); color:var(--good); } .chip.part { background:var(--warn-soft); color:var(--warn); } .chip.unpaid { background:var(--bad-soft); color:var(--bad); } .chip.nopay { background:var(--field); color:var(--muted); }
-  .chip.full { background:var(--brand-soft); color:var(--brand); } .chip.half { background:var(--warn-soft); color:var(--warn); }
+  .chip.full { background:var(--brand-soft); color:var(--brand); } .chip.custom { background:var(--good-soft); color:var(--good); } .chip.half { background:var(--warn-soft); color:var(--warn); }
   .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
   .tiles.four { grid-template-columns:repeat(2,1fr); }
   .tile { background:var(--card); border-radius:16px; padding:12px 14px; box-shadow:var(--shadow); }
@@ -73,7 +73,7 @@
   .thumb { width:84px; height:84px; flex:0 0 auto; border-radius:16px; background-color:hsl(var(--h) var(--tile-s) var(--tile-l)); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; font-size:30px; }
   .thumb.sm { width:58px; height:58px; border-radius:13px; font-size:22px; }
   .has > span { display:none; }
-  .banner { position:relative; height:200px; border-radius:20px; overflow:hidden; margin-bottom:12px; box-shadow:var(--shadow); background-color:hsl(var(--h) var(--tile-s) var(--tile-l)); background-size:cover; background-position:center; }
+  .banner { position:relative; height:168px; border-radius:20px; overflow:hidden; margin-bottom:12px; box-shadow:var(--shadow); background-color:hsl(var(--h) var(--tile-s) var(--tile-l)); background-size:cover; background-position:center; }
   .banner.sm { height:130px; }
   .banner .shade { position:absolute; inset:0; background:linear-gradient(transparent 30%, rgba(0,0,0,.7)); }
   .banner .b-ph { position:absolute; inset:0; padding-bottom:58px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:46px; color:rgba(0,0,0,.35); }
@@ -92,8 +92,16 @@
   input.filled, select.filled, textarea.filled { background-color:var(--good-soft); border-color:var(--good); }
   .rawtext { white-space:pre-wrap; font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace; background:var(--field); border-radius:10px; padding:10px; margin:6px 0 0; user-select:text; max-height:220px; overflow:auto; }
   .ocrnote { margin-top:8px; font-size:14px; font-weight:600; }
-  .acts { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
-  .act { flex-direction:column; gap:3px; padding:11px 2px; min-height:66px; font-size:12.5px; background:var(--card); box-shadow:var(--shadow); border-radius:16px; color:var(--ink); }
+  .acts { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:8px; margin-bottom:10px; }
+  .infoline { color:var(--muted); font-size:14.5px; font-weight:600; margin:2px 4px 14px; }
+  .bignums { display:flex; gap:30px; margin:6px 4px 14px; flex-wrap:wrap; }
+  .bignums small { display:block; color:var(--muted); font-size:13px; font-weight:600; } .bignums b { font-size:28px; letter-spacing:-.5px; }
+  .list { padding:2px 0; overflow:hidden; }
+  .lrow { width:100%; background:none; border-radius:0; justify-content:flex-start; gap:14px; padding:8px 16px; min-height:52px; text-align:left; border-top:1px solid var(--line); font-weight:500; }
+  .lrow:first-child { border-top:0; }
+  .lrow .si { font-size:22px; width:30px; text-align:center; } .lrow .grow { display:flex; flex-direction:column; align-items:flex-start; }
+  .lrow b { font-size:15.5px; line-height:1.2; } .lrow .sn { font-size:13px; line-height:1.25; color:var(--muted); font-weight:500; } .lrow .chev { color:var(--muted); font-size:24px; }
+  .act { flex-direction:column; gap:2px; padding:9px 2px; min-height:60px; font-size:12.5px; background:var(--card); box-shadow:var(--shadow); border-radius:16px; color:var(--ink); }
   .act .ic { font-size:22px; line-height:1; }
   .act.primary { background:var(--brand); color:#fff; } .act.danger { background:var(--stop); color:#fff; } .act.good { background:var(--good-soft); color:var(--good); }
   .act.off { opacity:.45; }
@@ -246,12 +254,18 @@ const avatar = (n, big) => `<span class="av${big ? " big" : ""}" style="backgrou
    tasks    = optional "what this person did" note for one day: {id: visitId:personId, visitId,siteId,personId,text} */
 const LS = "painterJobs.v2";
 const LISTS = ["sites", "visits", "photos", "notes", "contacts", "people", "tasks", "paints"];
-let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], settings: { clientId: "", sheetId: "", fullRate: "", halfRate: "", myName: "", bossName: "Ignacio" } };
+let state = { sites: [], visits: [], photos: [], notes: [], contacts: [], people: [], tasks: [], paints: [], settings: { clientId: "", sheetId: "", fullRate: 150, halfRate: 75, ratesInit: false, myName: "", bossName: "Ignacio" } };
 function load() {
   const def = state.settings;
   try { const s = JSON.parse(localStorage.getItem(LS)); if (s) state = { ...state, ...s, settings: { ...def, ...s.settings } }; } catch {}
   for (const k of LISTS) state[k] ||= [];
-  if (cleanup().changed) try { localStorage.setItem(LS, JSON.stringify(state)); } catch {}
+  let changed = cleanup().changed; const st = state.settings;
+  if (!st.ratesInit) { // one time: the standard day rates are $150 (full) and $75 (half); days that never got a rate are filled in
+    st.ratesInit = true; if (!(Number(st.fullRate) > 0)) st.fullRate = 150; if (!(Number(st.halfRate) > 0)) st.halfRate = 75;
+    for (const v of state.visits) { const job = state.sites.find(x => x.id === v.siteId); if (live(v) && v.end && (v.rate === "" || v.rate == null) && job && job.payMode !== "flat") { const t = hoursOf(v) >= 5 ? "full" : "half"; v.dayType = t; v.rate = defaultRate(t); touch(v); } }
+    changed = true;
+  }
+  if (changed) try { localStorage.setItem(LS, JSON.stringify(state)); } catch {}
 }
 function save() { cleanup(); try { localStorage.setItem(LS, JSON.stringify(state)); } catch { toast("Could not save — storage is full or blocked"); } queueSync(); }
 
@@ -355,7 +369,8 @@ const activeEntry = () => entries().find(v => !v.end);
 const addrOf = v => jobById(v.siteId)?.address || "Unknown address";
 const ownerName = s => [s.ownerFirst, s.ownerLast].filter(Boolean).join(" ");
 const dayRate = v => Number(v.rate) || 0;
-const dayLabel = v => v.dayType === "half" ? "Half day" : "Full day";
+const dayLabel = v => v.dayType === "half" ? "Half day" : v.dayType === "custom" ? "Custom" : "Full day";
+const dayCls = v => v.dayType === "half" ? "half" : v.dayType === "custom" ? "custom" : "full";
 const jobTotal = s => s.payMode === "flat" ? Number(s.pay) || 0 : entriesOf(s).reduce((a, v) => a + dayRate(v), 0);
 const paidOf = s => Number(s.paidAmount) || 0;
 const owedOf = s => Math.max(0, jobTotal(s) - paidOf(s));
@@ -437,8 +452,14 @@ function searchMatch(s, q) {
 
 /* ---------- clock in / out (only ever by pressing a Clock In button) ---------- */
 let lastOut = null;
+function ensureOpen(job) { // a finished job is only clocked into again if you deliberately reopen it
+  if (!job.done) return true;
+  if (!confirm(`${streetOf(job.address)} is marked finished.\n\nReopen it and clock in?`)) return false;
+  job.done = ""; touch(job); return true;
+}
 function startEntry(job) {
   if (activeEntry()) return toast("You're already clocked in — clock out first");
+  if (!ensureOpen(job)) return;
   const now = nowLocal(); state.visits.push(newDay(job, now.slice(0, 10), now, ""));
   save(); toast("Clocked in at " + streetOf(job.address)); tab = "clock"; openJob = null; openEntry = null; render();
 }
@@ -446,17 +467,18 @@ function clockOut() {
   const v = activeEntry(); if (!v) return;
   v.end = nowLocal(); touch(v);
   const was = defaultRate("full");
-  setDayType(v, hoursOf(v) >= 5 ? "full" : "half", true, was); // suggest full/half day from the hours; shown on the "Clocked out" card
+  if (v.dayType !== "custom") setDayType(v, hoursOf(v) >= 5 ? "full" : "half", true, was); // suggest full/half day from the hours; shown on the "Clocked out" card
   save(); toast(`Clocked out — ${fmtHrs(hoursOf(v))}`);
   lastOut = v.id; tab = "clock"; openJob = null; openEntry = null; render();
 }
 function setDayType(v, type, onlyIfDefault, was) {
+  if (type === "custom") { v.dayType = "custom"; touch(v); return; } // custom keeps whatever amount you type
   const untouched = v.rate === "" || Number(v.rate) === Number(defaultRate("full")) || Number(v.rate) === Number(defaultRate("half")) || Number(v.rate) === Number(was);
   v.dayType = type; if (!onlyIfDefault || untouched) v.rate = defaultRate(type); touch(v);
 }
 
 /* ---------- navigation ---------- */
-let tab = "clock", openJob = null, openEntry = null, openPaint = null, jobTab = "details", q = "", dateQ = "", jobFilter = "all", timerHandle = null;
+let tab = "clock", openJob = null, openEntry = null, openPaint = null, jobTab = null, q = "", dateQ = "", jobFilter = "all", timerHandle = null;
 let calMonth = todayStr().slice(0, 7), calSel = todayStr(), calView = "month";
 const TITLES = { clock: "Clock", calendar: "Calendar", pay: "Pay", settings: "Settings" };
 function render() {
@@ -472,7 +494,7 @@ function render() {
   else viewSettings(app);
   syncLabel(); fillThumbs(app); fillPaintPhotos(app);
 }
-const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; openPaint = null; if (t) jobTab = t; render(); window.scrollTo(0, 0); };
+const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; openPaint = null; jobTab = t || null; render(); window.scrollTo(0, 0); };
 
 /* ---------- crew sheet: tick who worked, optionally say what they did ---------- */
 function openCrewSheet(v, done) {
@@ -522,7 +544,7 @@ function viewClock(app) {
     $("#out").onclick = clockOut;
     $("#open").onclick = () => goJob(a.siteId, "days");
     $("#switch").onclick = () => switchPanel($("#choose"), a);
-    $("#chg").onclick = () => chooseJobUI($("#choose"), j => { a.siteId = j.id; touch(a); save(); render(); });
+    $("#chg").onclick = () => chooseJobUI($("#choose"), j => { if (!ensureOpen(j)) return; a.siteId = j.id; touch(a); save(); render(); }, true);
     return;
   }
   const today = entries().filter(v => dayOf(v.start) === todayStr()).sort((x, y) => y.start.localeCompare(x.start));
@@ -530,12 +552,12 @@ function viewClock(app) {
   const recent = recentJobs(), lo = lastOut && state.visits.find(x => x.id === lastOut && live(x) && x.end);
   app.innerHTML = `
     ${lo ? `<div class="card" style="background:var(--good-soft)"><div class="row top"><div><div style="font-weight:800;color:var(--good)">✓ Clocked out · ${fmtHrs(hoursOf(lo))}</div><div class="muted">${esc(addrOf(lo))}</div></div><button class="small" id="lo-x">✕</button></div>
-      <div class="pills" style="margin-top:12px"><button data-dt="full" class="${lo.dayType !== "half" ? "on" : ""}">Full day${defaultRate("full") ? " · " + money(defaultRate("full")) : ""}</button><button data-dt="half" class="${lo.dayType === "half" ? "on" : ""}">Half day${defaultRate("half") ? " · " + money(defaultRate("half")) : ""}</button></div>
+      <div class="pills" style="margin-top:12px"><button data-dt="full" class="${lo.dayType !== "half" && lo.dayType !== "custom" ? "on" : ""}">Full${defaultRate("full") ? " · " + money(defaultRate("full")) : ""}</button><button data-dt="half" class="${lo.dayType === "half" ? "on" : ""}">Half${defaultRate("half") ? " · " + money(defaultRate("half")) : ""}</button><button data-dt="custom" class="${lo.dayType === "custom" ? "on" : ""}">Custom${lo.dayType === "custom" ? " · " + money(lo.rate) : ""}</button></div>
       <div class="actions"><button class="small primary" id="lo-notes">Crew & notes for this day</button></div></div>` : ""}
     <div class="card">
       <h3>Start a job</h3>
       <input id="new-addr" list="addr-list" placeholder="Type the job address" autocapitalize="words" autocomplete="off">
-      <datalist id="addr-list">${jobs().map(x => `<option value="${esc(x.address)}"></option>`).join("")}</datalist>
+      <datalist id="addr-list">${jobs().filter(x => !x.done).map(x => `<option value="${esc(x.address)}"></option>`).join("")}</datalist>
       <button class="clock" id="in" style="margin-top:12px">▶ Clock In</button>
     </div>
     ${recent.length ? `<h2>Your jobs</h2>${recent.map(x => { const st = stats(x); return `<div class="card jrow" data-job-open="${x.id}">${thumb(x, "sm")}<div class="grow"><div class="street">${esc(streetOf(x.address))}</div><div class="muted">${ownerName(x) ? esc(ownerName(x)) + " · " : ""}${st.days} day${st.days === 1 ? "" : "s"}</div></div><button class="small primary" data-clockin="${x.id}">▶ Clock in</button></div>`; }).join("")}` : ""}
@@ -545,9 +567,11 @@ function viewClock(app) {
   if (lo) {
     $("#lo-x").onclick = () => { lastOut = null; render(); };
     $("#lo-notes").onclick = () => { tab = "jobs"; openJob = lo.siteId; openEntry = lo.id; render(); };
-    app.querySelectorAll("[data-dt]").forEach(b => b.onclick = () => { setDayType(lo, b.dataset.dt); save(); render(); });
+    app.querySelectorAll("[data-dt]").forEach(b => b.onclick = () => {
+      if (b.dataset.dt === "custom") { const a = parseFloat(prompt("Pay for this day ($):", lo.rate || "")); if (!(a >= 0)) return; setDayType(lo, "custom"); lo.rate = a; touch(lo); } else setDayType(lo, b.dataset.dt);
+      save(); render(); });
   }
-  app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = e => { if (!e.target.closest("button")) goJob(c.dataset.jobOpen, "details"); });
+  app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = e => { if (!e.target.closest("button")) goJob(c.dataset.jobOpen); });
   app.querySelectorAll("[data-clockin]").forEach(b => b.onclick = () => startEntry(jobById(b.dataset.clockin)));
   app.querySelectorAll("[data-day]").forEach(c => c.onclick = () => goJob(c.dataset.day, "days"));
 }
@@ -557,16 +581,17 @@ function switchPanel(box, a) {
     ${others.map(s => `<button class="block" style="margin-top:8px;justify-content:flex-start;text-align:left" data-sw="${s.id}">▶ ${esc(s.address)}</button>`).join("")}
     <div class="actions"><button class="primary small" id="sw-pick">Type or choose an address…</button><button class="small" id="sw-x">Cancel</button></div><div id="sw-choose"></div></div>`;
   const out = () => { a.end = nowLocal(); touch(a); setDayType(a, hoursOf(a) >= 5 ? "full" : "half", true); save(); lastOut = a.id; };
-  box.querySelectorAll("[data-sw]").forEach(b => b.onclick = () => { out(); startEntry(jobById(b.dataset.sw)); });
-  $("#sw-pick").onclick = () => chooseJobUI($("#sw-choose"), job => { out(); startEntry(job); });
+  const go = job => { if (!ensureOpen(job)) return; out(); startEntry(job); };
+  box.querySelectorAll("[data-sw]").forEach(b => b.onclick = () => go(jobById(b.dataset.sw)));
+  $("#sw-pick").onclick = () => chooseJobUI($("#sw-choose"), go, true);
   $("#sw-x").onclick = () => { box.innerHTML = ""; };
 }
 function recentJobs() {
   const last = {}; entries().forEach(v => { if (!last[v.siteId] || v.start > last[v.siteId]) last[v.siteId] = v.start; });
-  return jobs().filter(s => !s.done || last[s.id] >= addDays(todayStr(), -7)).sort((a, b) => (last[b.id] || "").localeCompare(last[a.id] || "")).slice(0, 6);
+  return jobs().filter(s => !s.done).sort((a, b) => (last[b.id] || "").localeCompare(last[a.id] || "")).slice(0, 6);
 }
-function chooseJobUI(box, onPick) {
-  const list = jobs().sort((a, b) => a.address.localeCompare(b.address));
+function chooseJobUI(box, onPick, openOnly) {
+  const list = jobs().filter(x => !openOnly || !x.done).sort((a, b) => a.address.localeCompare(b.address));
   box.innerHTML = `<div class="card"><h3>Pick a job</h3>
     ${list.length ? `<label style="margin-top:0">Saved jobs</label><select id="pk-sel"><option value="">Choose…</option>${list.map(s => `<option value="${s.id}">${esc(s.address)}</option>`).join("")}</select>` : ""}
     <label>Or type an address</label><input id="pk-new" placeholder="123 Main St, Springfield" autocapitalize="words">
@@ -586,7 +611,7 @@ function dayCard(v, withTags) {
   return `<div class="card tap dcard" data-day="${job.id}">${thumb(job, "sm")}<div class="grow">
     <div class="street">${esc(streetOf(job.address))}</div>
     <div class="muted">${fmtTime(v.start)}${v.end ? " – " + fmtTime(v.end) + " · " + fmtHrs(hoursOf(v)) : " – now"}</div>
-    <div class="jc-meta"><span class="chip ${v.dayType === "half" ? "half" : "full"}">${dayLabel(v)}${dayRate(v) ? " · " + money(dayRate(v)) : ""}</span>${tags}${crewIds(v).length ? `<span class="avatars">${crewNames(v).map(n => avatar(n)).join("")}</span>` : ""}</div></div></div>`;
+    <div class="jc-meta"><span class="chip ${dayCls(v)}">${dayLabel(v)}${dayRate(v) ? " · " + money(dayRate(v)) : ""}</span>${tags}${crewIds(v).length ? `<span class="avatars">${crewNames(v).map(n => avatar(n)).join("")}</span>` : ""}</div></div></div>`;
 }
 
 /* ---------- Calendar tab ---------- */
@@ -660,7 +685,7 @@ function viewJobs(app) {
   $("#dq").onchange = e => { dateQ = e.target.value; render(); };
   $("#dqx").onclick = () => { dateQ = ""; render(); };
   $("#newjob").onclick = () => chooseJobUI($("#choose"), job => { save(); goJob(job.id, "details"); });
-  app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = () => goJob(c.dataset.jobOpen, "details")); // opening a job never clocks you in
+  app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = () => goJob(c.dataset.jobOpen)); // opening a job never clocks you in
 }
 
 /* ---------- Job page: the profile ---------- */
@@ -668,10 +693,19 @@ const JOBTABS = [["details", "📋", "Details"], ["days", "📆", "Days"], ["pho
 function viewJob(app) {
   const s = jobById(openJob);
   if (!s) { openJob = null; return render(); }
-  const st = stats(s), act = activeEntry(), ps = payStatus(s), badge = { paints: paintsOf(s).length, photos: photosOf(s).length, notes: notesOf(s).length + contactsOf(s).length, days: st.days };
+  const st = stats(s), act = activeEntry(), ps = payStatus(s), pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const sec = JOBTABS.find(x => x[0] === jobTab);
+  if (sec) { // one section on its own page
+    app.innerHTML = `<button class="small" id="back">← ${esc(streetOf(s.address))}</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 4px 12px"><span style="font-size:28px">${sec[1]}</span><div style="font-size:24px;font-weight:800;letter-spacing:-.3px">${sec[2]}</div></div><div id="jt"></div>`;
+    $("#back").onclick = () => { jobTab = null; render(); window.scrollTo(0, 0); };
+    ({ details: tabDetails, days: tabDays, photos: tabPhotos, paints: tabPaints, notes: tabNotes, pay: tabPay })[jobTab]($("#jt"), s, st);
+    return;
+  }
   const statChip = st.active ? `<span class="chip live">● In progress</span>` : s.done ? `<span class="chip done">✓ Finished</span>` : `<span class="chip open">Open</span>`;
-  const hasPhone = !!digits(s.ownerPhone), pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const hasPhone = !!digits(s.ownerPhone);
   const sum = { details: ownerName(s) || (s.ownerPhone ? "Contact saved" : "Add owner"), days: pl(st.days, "day"), photos: pl(photosOf(s).length, "photo"), paints: pl(paintsOf(s).length, "paint"), notes: pl(notesOf(s).length + contactsOf(s).length, "note"), pay: ps === "nopay" ? "Set the pay" : owedOf(s) > 0 ? money(owedOf(s)) + " due" : "Paid ✓" };
+  const bits = st.days ? [`Started ${fmtShort(st.first)}`, s.done ? `Finished ${fmtShort(doneDate(s))}` : st.active ? "Working now" : `Last day ${fmtShort(st.last)}`, `${pl(st.days, "day")} · ${fmtHrs(st.hours)}`] : ["No days logged yet"];
   app.innerHTML = `
     <button class="small" id="back">← All jobs</button>
     <div class="banner" style="margin-top:10px;--h:${hue(s.address)}" data-thumb="${s.id}"><div class="b-ph">🏠<small>Add a photo of the house</small></div><div class="shade"></div>
@@ -679,22 +713,20 @@ function viewJob(app) {
       <label class="b-cam">📷 ${coverPhoto(s) ? "Change" : "Add photo"}<input id="cover-in" type="file" accept="image/*" style="display:none"></label>
       <div class="b-text"><div class="b-addr">${esc(streetOf(s.address))}</div><div class="b-sub">${esc(restOf(s.address))}${ownerName(s) ? " · 👤 " + esc(ownerName(s)) : ""}</div></div></div>
     <div class="acts">
-      ${st.active && act?.siteId === s.id ? `<button class="act danger" id="j-out"><span class="ic">■</span>Clock out</button>` : `<button class="act primary" id="j-in"><span class="ic">▶</span>Clock in</button>`}
+      ${s.done ? `<button class="act soft" id="j-done"><span class="ic">↺</span>Reopen</button>` : st.active && act?.siteId === s.id ? `<button class="act danger" id="j-out"><span class="ic">■</span>Clock out</button>` : `<button class="act primary" id="j-in"><span class="ic">▶</span>Clock in</button>`}
       <a class="btn act" href="${mapsUrl(s)}" target="_blank" rel="noopener"><span class="ic">🧭</span>Directions</a>
       ${hasPhone ? `<a class="btn act good" href="tel:${digits(s.ownerPhone)}"><span class="ic">📞</span>Call</a>` : `<button class="act off" id="j-nophone"><span class="ic">📞</span>Call</button>`}
-      <button class="act ${s.done ? "" : "good"}" id="j-done"><span class="ic">${s.done ? "↺" : "✓"}</span>${s.done ? "Reopen" : "Finish"}</button>
+      ${s.done ? "" : `<button class="act good" id="j-done"><span class="ic">✓</span>Finish</button>`}
     </div>
-    <div class="tiles"><div class="tile"><div class="k">Started</div><div class="v">${st.days ? fmtShort(st.first) : "–"}</div></div><div class="tile"><div class="k">${s.done ? "Finished" : st.active ? "Status" : "Last day"}</div><div class="v">${s.done ? fmtShort(doneDate(s)) : st.active ? "Working" : st.days ? fmtShort(st.last) : "–"}</div></div><div class="tile"><div class="k">Took</div><div class="v" style="font-size:17px">${st.days} day${st.days === 1 ? "" : "s"}<div class="muted" style="font-weight:600">${fmtHrs(st.hours)}</div></div></div></div>
-    <div class="sections">${JOBTABS.map(([k, ic, l]) => `<button data-jt="${k}" class="sec ${jobTab === k ? "on" : ""}"><span class="si">${ic}</span><span class="sl">${l}</span><span class="sn">${esc(sum[k])}</span></button>`).join("")}</div>
-    <div id="jt"></div>`;
+    <div class="infoline">${bits.join(" · ")}</div>
+    <div class="card list">${JOBTABS.map(([k, ic, l]) => `<button class="lrow" data-jt="${k}"><span class="si">${ic}</span><span class="grow"><b>${l}</b><span class="sn">${esc(sum[k])}</span></span><span class="chev">›</span></button>`).join("")}</div>`;
   $("#back").onclick = () => { openJob = null; render(); };
-  app.querySelectorAll("[data-jt]").forEach(b => b.onclick = () => { jobTab = b.dataset.jt; render(); });
+  app.querySelectorAll("[data-jt]").forEach(b => b.onclick = () => { jobTab = b.dataset.jt; render(); window.scrollTo(0, 0); });
   if ($("#j-in")) $("#j-in").onclick = () => startEntry(s);
   if ($("#j-out")) $("#j-out").onclick = clockOut;
   if ($("#j-nophone")) $("#j-nophone").onclick = () => { jobTab = "details"; render(); toast("Add the owner's phone number here"); };
-  $("#j-done").onclick = () => { s.done = s.done ? "" : todayStr(); touch(s); save(); toast(s.done ? "Job marked finished" : "Job reopened"); render(); };
+  $("#j-done").onclick = () => { if (!s.done && st.active) return toast("Clock out first, then finish the job"); s.done = s.done ? "" : todayStr(); touch(s); save(); toast(s.done ? "Job finished. It won't show up for clocking in." : "Job reopened"); render(); };
   $("#cover-in").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: "before", caption: "", deleted: false })); s.cover = id; touch(s); save(); toast("House photo saved"); render(); } catch { toast("That file isn't a photo"); } };
-  ({ details: tabDetails, days: tabDays, photos: tabPhotos, paints: tabPaints, notes: tabNotes, pay: tabPay })[jobTab]($("#jt"), s, st);
 }
 
 function tabDetails(box, s) {
@@ -745,7 +777,7 @@ function tabDays(box, s, st) {
   box.innerHTML = `
     <div class="row" style="margin:0 4px 10px"><h2 style="margin:0">Days worked</h2><button class="small primary" id="j-add">＋ Add a day</button></div>
     ${st.es.length ? [...st.es].reverse().map(v => { const tasks = tasksOf(v); return `<div class="card tap daycard" data-entry="${v.id}" style="padding:14px 16px">
-      <div class="row top"><div><div style="font-weight:800">${fmtDay(v.start)}</div><div class="muted">${fmtTime(v.start)}${v.end ? " – " + fmtTime(v.end) + " · " + fmtHrs(hoursOf(v)) : " – now"}</div></div><div style="text-align:right"><span class="chip ${v.dayType === "half" ? "half" : "full"}">${dayLabel(v)}</span><div style="font-weight:800;margin-top:4px">${dayRate(v) ? money(dayRate(v)) : `<span class="muted">no rate</span>`}</div></div></div>
+      <div class="row top"><div><div style="font-weight:800">${fmtDay(v.start)}</div><div class="muted">${fmtTime(v.start)}${v.end ? " – " + fmtTime(v.end) + " · " + fmtHrs(hoursOf(v)) : " – now"}</div></div><div style="text-align:right"><span class="chip ${dayCls(v)}">${dayLabel(v)}</span><div style="font-weight:800;margin-top:4px">${dayRate(v) ? money(dayRate(v)) : `<span class="muted">no rate</span>`}</div></div></div>
       <div class="crewline" style="margin-top:8px">${crewSummary(v)}</div>
       ${tasks.map(t => `<div class="sub">• <b>${esc(t.name)}:</b> ${esc(t.text)}</div>`).join("")}
       ${v.notes ? `<div class="muted" style="margin-top:6px">${esc(v.notes.slice(0, 120))}${v.notes.length > 120 ? "…" : ""}</div>` : ""}</div>`; }).join("") : `<div class="empty"><span class="big-emoji">📅</span>No days yet. Clock in, or add a day.</div>`}
@@ -843,17 +875,17 @@ function tabPay(box, s, st) {
     <div class="pills" style="margin-top:12px"><button data-pm="day" class="${flat ? "" : "on"}">By the day</button><button data-pm="flat" class="${flat ? "on" : ""}">One price</button></div>
     ${flat ? `<label>Price for the whole job</label><div class="row"><div class="money grow"><input id="j-pay" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(s.pay)}" placeholder="0.00"></div><button class="primary" id="j-pay-save">Save</button></div>`
       : `<div style="margin-top:8px">${st.es.length ? st.es.map(v => `<div class="line"><div><div style="font-weight:700">${fmtDay(v.start)}</div><div class="muted">${crewIds(v).length ? crewIds(v).length + " on crew" : "no crew set"}</div></div>
-        <div class="row" style="gap:6px"><select data-dt="${v.id}" style="width:auto;min-height:40px;padding:6px 8px"><option value="full" ${v.dayType !== "half" ? "selected" : ""}>Full</option><option value="half" ${v.dayType === "half" ? "selected" : ""}>Half</option></select>
+        <div class="row" style="gap:6px"><select data-dt="${v.id}" style="width:auto;min-height:40px;padding:6px 8px"><option value="full" ${v.dayType !== "half" && v.dayType !== "custom" ? "selected" : ""}>Full</option><option value="half" ${v.dayType === "half" ? "selected" : ""}>Half</option><option value="custom" ${v.dayType === "custom" ? "selected" : ""}>Custom</option></select>
         <div class="money" style="width:104px"><input data-rate="${v.id}" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(v.rate)}" placeholder="0" style="min-height:40px;padding:6px 8px 6px 24px"></div></div></div>`).join("") : `<div class="muted" style="padding:10px 0">No days yet. Each day you add gets its own rate.</div>`}
         <div class="row" style="padding-top:10px;border-top:1px solid var(--line)"><strong>Job total</strong><strong style="font-size:19px">${money(jobTotal(s))}</strong></div>
         ${defaultRate("full") || defaultRate("half") ? "" : `<div class="muted" style="margin-top:8px">Tip: set your usual full-day and half-day rates in Settings and they fill in automatically.</div>`}</div>`}
-    <div class="tiles four" style="margin:14px 0 0"><div class="tile" style="box-shadow:none;background:var(--field)"><div class="k">Received</div><div class="v paid">${money(paidOf(s))}</div></div><div class="tile" style="box-shadow:none;background:var(--field)"><div class="k">Still owed</div><div class="v owed">${money(owedOf(s))}</div></div></div>
+    <div class="bignums" style="margin:16px 0 2px"><div><small>Received</small><b class="paid">${money(paidOf(s))}</b></div><div><small>Still owed</small><b class="owed">${money(owedOf(s))}</b></div></div>
     ${s.paidDate ? `<div class="muted" style="margin-top:10px">Last payment ${fmtDay(s.paidDate)}</div>` : ""}
     <div class="actions">${owedOf(s) > 0 ? `<button class="good" id="j-full">✓ Mark paid in full</button>` : ""}<button id="j-part">Enter amount received…</button>${paidOf(s) ? `<button class="danger" id="j-unpay">Clear</button>` : ""}</div></div>`;
   box.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { s.payMode = b.dataset.pm; touch(s); save(); render(); });
   if ($("#j-pay-save")) $("#j-pay-save").onclick = () => { s.pay = $("#j-pay").value === "" ? "" : Number($("#j-pay").value); touch(s); save(); toast("Price saved"); render(); };
   box.querySelectorAll("[data-dt]").forEach(el => el.onchange = () => { const v = state.visits.find(x => x.id === el.dataset.dt); setDayType(v, el.value); save(); render(); });
-  box.querySelectorAll("[data-rate]").forEach(el => el.onchange = () => { const v = state.visits.find(x => x.id === el.dataset.rate); v.rate = el.value === "" ? "" : Number(el.value); touch(v); save(); render(); });
+  box.querySelectorAll("[data-rate]").forEach(el => el.onchange = () => { const v = state.visits.find(x => x.id === el.dataset.rate); v.rate = el.value === "" ? "" : Number(el.value); if (v.dayType !== "custom" && v.rate !== "" && Number(v.rate) !== Number(defaultRate(v.dayType))) v.dayType = "custom"; touch(v); save(); render(); }); // a different amount is a custom day
   const setPaid = amt => { s.paidAmount = amt; s.paidDate = amt ? todayStr() : ""; touch(s); save(); render(); };
   if ($("#j-full")) $("#j-full").onclick = () => { if (!(jobTotal(s) > 0)) return toast("Set the pay first"); setPaid(jobTotal(s)); };
   $("#j-part").onclick = () => { const a = parseFloat(prompt("Total amount received so far ($):", paidOf(s) || owedOf(s) || "")); if (a >= 0) setPaid(a); };
@@ -1047,7 +1079,7 @@ function viewPaint(app) {
 function viewEntry(app) {
   const v = state.visits.find(x => x.id === openEntry && live(x)), s = v && jobById(v.siteId);
   if (!v || !s) { openEntry = null; return render(); }
-  let type = v.dayType === "half" ? "half" : "full";
+  let type = v.dayType === "half" ? "half" : v.dayType === "custom" ? "custom" : "full";
   app.innerHTML = `
     <button class="small" id="back">← ${esc(streetOf(s.address))}</button>
     <div class="card" style="margin-top:10px"><h3>${fmtDay(v.start)}</h3>
@@ -1055,8 +1087,8 @@ function viewEntry(app) {
       <div><label style="margin-top:0">Clocked out</label><input id="v-end" type="datetime-local" value="${esc(v.end)}"></div></div>
       ${v.end ? `<div class="muted" style="margin-top:8px">⏱ ${fmtHrs(hoursOf(v))}</div>` : `<div class="muted" style="margin-top:8px">Still working</div>`}
       <label>Type of day & pay</label>
-      <div class="two"><div class="pills"><button data-t="full" class="${type === "full" ? "on" : ""}">Full</button><button data-t="half" class="${type === "half" ? "on" : ""}">Half</button></div>
-        <div class="money"><input id="v-rate" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(v.rate)}" placeholder="Pay for this day"></div></div>
+      <div class="pills"><button data-t="full" class="${type === "full" ? "on" : ""}">Full${defaultRate("full") ? " · " + money(defaultRate("full")) : ""}</button><button data-t="half" class="${type === "half" ? "on" : ""}">Half${defaultRate("half") ? " · " + money(defaultRate("half")) : ""}</button><button data-t="custom" class="${type === "custom" ? "on" : ""}">Custom</button></div>
+      <div class="money" style="margin-top:8px"><input id="v-rate" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(v.rate)}" placeholder="Pay for this day"></div>
       <label>Who worked this day</label>
       <div class="row" style="align-items:flex-start"><div class="crewline">${crewSummary(v)}</div><button class="small soft" id="crew-edit">Edit crew</button></div>
       ${tasksOf(v).map(t => `<div class="sub">• <b>${esc(t.name)}:</b> ${esc(t.text)}</div>`).join("")}
@@ -1064,11 +1096,13 @@ function viewEntry(app) {
       <div class="actions"><button class="primary" id="v-save">Save day</button><button class="danger" id="v-del">Delete day</button></div></div>`;
   const back = () => { openEntry = null; jobTab = "days"; render(); };
   $("#back").onclick = back;
+  const mark = () => app.querySelectorAll("[data-t]").forEach(x => x.classList.toggle("on", x.dataset.t === type));
   app.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
-    const cur = $("#v-rate").value, other = type === "full" ? "half" : "full";
-    if (cur === "" || Number(cur) === Number(defaultRate(type))) $("#v-rate").value = defaultRate(b.dataset.t);
-    type = b.dataset.t; app.querySelectorAll("[data-t]").forEach(x => x.classList.toggle("on", x.dataset.t === type));
+    const cur = $("#v-rate").value, nt = b.dataset.t;
+    if (nt === "custom") $("#v-rate").focus(); else if (cur === "" || Number(cur) === Number(defaultRate("full")) || Number(cur) === Number(defaultRate("half"))) $("#v-rate").value = defaultRate(nt);
+    type = nt; mark();
   });
+  $("#v-rate").oninput = e => { if (type !== "custom" && e.target.value !== "" && Number(e.target.value) !== Number(defaultRate(type))) { type = "custom"; mark(); } }; // typing a different amount makes it a custom day
   $("#crew-edit").onclick = () => { v.start = $("#v-start").value || v.start; v.end = $("#v-end").value; v.notes = $("#v-notes").value; v.dayType = type; v.rate = $("#v-rate").value === "" ? "" : Number($("#v-rate").value); touch(v); save(); openCrewSheet(v, render); };
   $("#v-save").onclick = () => {
     v.start = $("#v-start").value || v.start; v.end = $("#v-end").value; v.notes = $("#v-notes").value; v.dayType = type; v.rate = $("#v-rate").value === "" ? "" : Number($("#v-rate").value); touch(v); save();
@@ -1088,7 +1122,7 @@ function viewPay(app) {
   all.forEach(v => { const m = v.start.slice(0, 7), r = months[m] ||= { days: 0, jobs: new Set(), got: 0 }; r.days++; r.jobs.add(v.siteId); });
   js.forEach(s => { if (paidOf(s) && s.paidDate) { const m = s.paidDate.slice(0, 7), r = months[m] ||= { days: 0, jobs: new Set(), got: 0 }; r.got += paidOf(s); } });
   app.innerHTML = `
-    <div class="tiles four"><div class="tile"><div class="k">Owed to me</div><div class="v owed">${money(owed)}</div></div><div class="tile"><div class="k">Received</div><div class="v paid">${money(paid)}</div></div></div>
+    <div class="bignums"><div><small>Owed to me</small><b class="owed">${money(owed)}</b></div><div><small>Received</small><b class="paid">${money(paid)}</b></div></div>
     <a class="card row tap" href="report.html" style="color:inherit;text-decoration:none"><span><strong>📤 Report for ${esc(state.settings.bossName || "your boss")}</strong><div class="muted">Jobs, days worked, owed and paid. Easy to send.</div></span><span style="font-size:22px">›</span></a>
     <a class="card row tap" href="ledger.html" style="color:inherit;text-decoration:none"><span><strong>📒 Ledger</strong><div class="muted">By job, by day, and a day × job grid</div></span><span style="font-size:22px">›</span></a>
     ${noPrice.length ? `<div class="card" style="background:var(--warn-soft)"><strong>${noPrice.length} job${noPrice.length > 1 ? "s" : ""} with no pay yet</strong><div class="muted">Open each job → Pay and set the day rates so they count here.</div></div>` : ""}
@@ -1113,7 +1147,7 @@ function viewSettings(app) {
     <div class="card"><h3>👷 Employees</h3><div class="muted">Add, rename or remove the people who work with you. You tick who worked each day.</div>
       ${people().map(p => `<div class="line"><span class="row" style="justify-content:flex-start;gap:10px">${avatar(p.name, true)}<strong>${esc(p.name)}</strong></span><span class="row" style="gap:6px"><button class="small soft" data-pren="${p.id}">Rename</button><button class="small danger" data-pdel="${p.id}" aria-label="Remove">✕</button></span></div>`).join("") || `<div class="muted" style="padding:10px 0">No employees yet.</div>`}
       <div class="row" style="margin-top:10px"><input id="p-name" placeholder="Add an employee" autocapitalize="words"><button class="primary" id="p-add">Add</button></div></div>
-    <div class="card"><h3>💵 Day rates</h3><div class="muted">Your usual pay for a day. These fill in automatically; you can still change any single day.</div>
+    <div class="card"><h3>💵 Day rates</h3><div class="muted">Your standard pay. Every full day and half day gets these automatically. For a day that is different, choose <b>Custom</b> on that day and type the amount.</div>
       <div class="two"><div><label>Full day</label><div class="money"><input id="r-full" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(st.fullRate)}" placeholder="0"></div></div><div><label>Half day</label><div class="money"><input id="r-half" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(st.halfRate)}" placeholder="0"></div></div></div>
       <div class="actions"><button class="primary" id="r-save">Save rates</button></div></div>
     <div class="card"><h3>📤 Report</h3><div class="muted">Who the pay report is for, and your name on it.</div>

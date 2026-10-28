@@ -168,7 +168,7 @@ function viewDay(es) {
     list.forEach((v, i) => {
       const a = agg[v.siteId], h = hrs(v), p = a.s.payMode === "flat" ? (a.total && a.hours ? a.total * h / a.hours : 0) : num(v.rate); dh += h; dp += p;
       lastCsvRows.push([d, a.s.address, fmtT(v.start), fmtT(v.end), h2(h), crewOf(v).length || "", crewOf(v).join("; "), p ? p.toFixed(2) : "", (v.notes || "").replace(/\s+/g, " ")]);
-      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)} · ${v.dayType === "half" ? "Half" : "Full"} day${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div>${crewOf(v).length ? `<div class="muted" style="font-size:12px">👷 ${crewOf(v).length}: ${esc(crewOf(v).join(", "))}</div>` : ""}</td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
+      rows.push(`<tr><td class="first" style="white-space:nowrap">${i === 0 ? fmtDW(d) : ""}</td><td class="job">${esc(a.s.address)}<div class="muted" style="font-size:12px">${fmtT(v.start)} – ${fmtT(v.end)} · ${v.dayType === "half" ? "Half day" : v.dayType === "custom" ? "Custom day" : "Full day"}${v.notes ? " · " + esc(v.notes.slice(0, 80)) : ""}</div>${crewOf(v).length ? `<div class="muted" style="font-size:12px">👷 ${crewOf(v).length}: ${esc(crewOf(v).join(", "))}</div>` : ""}</td><td class="n">${h2(h)}</td><td class="n">${p ? m2(p) : "—"}</td></tr>`);
     });
     if (list.length > 1) rows.push(`<tr class="sub"><td class="first">Day total</td><td>${list.length} jobs</td><td class="n">${h2(dh)}</td><td class="n">${dp ? m2(dp) : "—"}</td></tr>`);
     mH += dh; mP += dp; totH += dh; totP += dp;
