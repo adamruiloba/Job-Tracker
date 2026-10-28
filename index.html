@@ -91,6 +91,7 @@
   .sec.on { background:var(--brand); color:#fff; } .sec.on .sn { color:rgba(255,255,255,.88); }
   input.filled, select.filled, textarea.filled { background-color:var(--good-soft); border-color:var(--good); }
   .rawtext { white-space:pre-wrap; font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace; background:var(--field); border-radius:10px; padding:10px; margin:6px 0 0; user-select:text; max-height:220px; overflow:auto; }
+  .alts { margin-top:6px; font-size:13px; color:var(--warn); font-weight:600; display:flex; flex-wrap:wrap; gap:6px; align-items:center; } .altbtn { background:var(--warn-soft); color:var(--warn); cursor:pointer; padding:5px 12px; min-height:30px; }
   .ocrnote { margin-top:8px; font-size:14px; font-weight:600; }
   .acts { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:8px; margin-bottom:10px; }
   .infoline { color:var(--muted); font-size:14.5px; font-weight:600; margin:2px 4px 14px; }
@@ -443,7 +444,7 @@ const thumb = (s, cls = "") => `<div class="thumb ${cls}" data-thumb="${s.id}" s
 /* ---------- search: name, phone, address, notes, crew... ---------- */
 function searchMatch(s, q) {
   const es = entriesOf(s), contacts = contactsOf(s);
-  const parts = [s.address, ownerName(s), s.ownerPhone, s.ownerInfo, s.paint, s.work, ...contacts.flatMap(c => [c.name, c.role, c.phone]), ...paintsOf(s).flatMap(x => [x.brand, x.product, x.colorName, x.colorCode, x.sheen, x.areas, x.notes]), ...notesOf(s).map(n => n.text), ...es.flatMap(v => [v.notes, ...crewNames(v), ...tasksOf(v).map(t => t.text)])];
+  const parts = [s.address, ownerName(s), s.ownerPhone, s.ownerInfo, s.paint, s.work, ...contacts.flatMap(c => [c.name, c.role, c.phone]), ...paintsOf(s).flatMap(x => [x.brand, x.product, x.type, x.colorName, x.colorCode, x.sheen, x.base, x.orderNo, x.store, x.productCode, x.areas, x.notes]), ...notesOf(s).map(n => n.text), ...es.flatMap(v => [v.notes, ...crewNames(v), ...tasksOf(v).map(t => t.text)])];
   const hay = normAddr(parts.join(" ")), phones = [s.ownerPhone, ...contacts.map(c => c.phone)].map(digits).filter(Boolean);
   const qd = digits(q);
   if (qd.length >= 3 && phones.some(p => p.includes(qd))) return true;
@@ -893,9 +894,14 @@ function tabPay(box, s, st) {
 }
 
 /* ---------- reading a paint label (the sticker the store prints) ---------- */
-const BRAND_RES = [[/SHERWIN|WILLIAMS|\bSW\s?[-]?\s?\d{4}\b/, "Sherwin-Williams"], [/BEHR/, "Behr"], [/KELLY[\s-]*MOORE/, "Kelly-Moore"], [/BENJAMIN|\bMOORE\b/, "Benjamin Moore"], [/DUNN[\s-]*EDWARDS/, "Dunn-Edwards"], [/VALSPAR/, "Valspar"], [/\bPPG\b/, "PPG"], [/GLIDDEN/, "Glidden"], [/FRAZEE/, "Frazee"], [/\bVISTA\b/, "Vista"]];
-const PRODUCT_RES = [["Duration", /DURATION/], ["SuperPaint", /SUPER[\s-]*PAINT/], ["ProClassic", /PRO[\s-]*CLASSIC/], ["ProMar 200", /PRO[\s-]*MAR\s*200/], ["ProMar 400", /PRO[\s-]*MAR\s*400/], ["ProMar", /PRO[\s-]*MAR\b/], ["Emerald", /EMERALD/], ["Resilience", /RESILIENCE/], ["Cashmere", /CASHMERE/], ["Harmony", /HARMONY/], ["Captivate", /CAPTIVATE/], ["Eminence", /EMINENCE/], ["A-100", /\bA[\s-]?100\b/], ["Loxon", /LOXON/], ["SuperDeck", /SUPER[\s-]*DECK/], ["Regal Select", /REGAL/], ["Aura", /\bAURA\b/], ["Marquee", /MARQUEE/], ["Primer", /PRIMER|PREP[\s-]*RITE|PRO[\s-]*BLOCK/]];
+const BRAND_RES = [[/SHERWIN|SHERMEN|CHERWIN|[HW]ILLIAM?S|SHER[-\s]?COLOR|\bSW\s?[-]?\s?\d{4}\b/, "Sherwin-Williams"], [/BEHR/, "Behr"], [/KELLY[\s-]*MOORE/, "Kelly-Moore"], [/BENJAMIN|\bMOORE\b/, "Benjamin Moore"], [/DUNN[\s-]*EDWARDS/, "Dunn-Edwards"], [/VALSPAR/, "Valspar"], [/\bPPG\b/, "PPG"], [/GLIDDEN/, "Glidden"], [/FRAZEE/, "Frazee"], [/\bVISTA\b/, "Vista"]];
+const PRODUCT_RES = [["Duration", /DURATION/], ["SuperPaint", /SUPER[\s-]*PAINT/], ["ProClassic", /PRO[\s-]*CLASSIC/], ["ProMar 200", /PRO[\s-]*MAR\s*200/], ["ProMar 400", /PRO[\s-]*MAR\s*400/], ["ProMar", /PRO[\s-]*MAR\b/], ["Emerald", /EMERALD/], ["Resilience", /RESILIENCE/], ["Cashmere", /CASHMERE/], ["Harmony", /HARMONY/], ["Captivate", /CAPTIVATE/], ["Eminence", /EMINENCE/], ["A-100", /\b[AP4][\s-]?100\b/], ["Loxon", /LOXON/], ["SuperDeck", /SUPER[\s-]*DECK/], ["Regal Select", /REGAL/], ["Aura", /\bAURA\b/], ["Marquee", /MARQUEE/], ["Primer", /PRIMER|PREP[\s-]*RITE|PRO[\s-]*BLOCK/]];
+const BASE_RE = /\b(EXTRA\s+WHITE|EXTR4\s+WHITE|XTRA\s+WHITE|DEEP\s+BASE|ULTRA\s*DEEP|ACCENT\s+BASE|PASTEL\s+BASE|MEDIUM\s+BASE|LIGHT\s+BASE|CLEAR\s+BASE|TINT\s+BASE|BRIGHT\s+WHITE|HIGH\s+REFLECTIVE\s+WHITE)\b/;
 const titleCase = s => s.toLowerCase().replace(/(^|[\s\-\/&])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+function parseDate(str) { // slashes are often misread as 1, 7 or |, so try those too
+  const m = String(str).match(/\b(\d{2})\s*[\/\\|1lI7\-.]?\s*(\d{2})\s*[\/\\|1lI7\-.]?\s*(\d{2})\b/); if (!m) return "";
+  const [mo, d, y] = [+m[1], +m[2], +m[3]]; return mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && y >= 20 && y <= 39 ? `${m[1]}/${m[2]}/${m[3]}` : "";
+}
 function parseLabel(raw) {
   const text = String(raw || "").replace(/[|\\_~`]+/g, " ").replace(/[ \t]+/g, " "), up = text.toUpperCase();
   // letters that OCR reads as digits (PR0CLASSIC, SHERW1N) are repaired before matching words
@@ -903,18 +909,18 @@ function parseLabel(raw) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean), out = {};
   const fixDigits = s => s.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1").replace(/S/g, "5");
   for (const [re, name] of BRAND_RES) if (re.test(upL)) { out.brand = name; break; }
-  let codeRe = null;
-  // Sherwin-Williams: SW 7008 (the O/I/S look-alikes that OCR confuses with digits are repaired)
-  let m = up.match(/\bSW\s*[-–.:]?\s*([0-9OIL|S]{4})\b/);
-  if (m && (m[1].match(/\d/g) || []).length >= 2 && /^\d{4}$/.test(fixDigits(m[1]))) { out.colorCode = "SW " + fixDigits(m[1]); codeRe = new RegExp("SW\\s*[-–.:]?\\s*" + m[1].replace(/[|]/g, "\\|") + "\\b", "i"); if (!out.brand) out.brand = "Sherwin-Williams"; }
+  let codeRe = null, m;
+  // color code. Sherwin-Williams stickers print it with or without "SW" (e.g. "7552 BAUHAUS BUFF")
+  if ((m = up.match(/\bSW\s*[-–.:]?\s*([0-9OIL|S]{4})\b/)) && (m[1].match(/\d/g) || []).length >= 2 && /^\d{4}$/.test(fixDigits(m[1]))) { out.colorCode = "SW " + fixDigits(m[1]); codeRe = new RegExp("SW\\s*[-–.:]?\\s*" + m[1].replace(/[|]/g, "\\|") + "\\b", "i"); out.brand ||= "Sherwin-Williams"; }
+  if (!out.colorCode) for (const l of lines) { const mm = l.match(/(?:^|[^\d])(\d{4})\s+([A-Za-z][A-Za-z' &\-]{2,38})(?:\s|\\|$)/); if (mm && !/^(SHER|WILL|STORE|ORDER|DATE)/i.test(mm[2])) { out.colorCode = (out.brand === "Sherwin-Williams" || !out.brand ? "SW " : "") + mm[1]; if (!out.brand) out.brand = "Sherwin-Williams"; codeRe = new RegExp(mm[1] + "\\s+" + mm[2].slice(0, 3).replace(/[^A-Za-z]/g, "."), "i"); out.colorName = titleCase(mm[2].replace(/\s+/g, " ").replace(/^[\s\-&']+|[\s\-&']+$/g, "")); break; } }
   if (!out.colorCode && (m = up.match(/\b(HC|OC|CC|AF|CSP)\s*[-–]\s*(\d{1,3})\b/))) { out.colorCode = `${m[1]}-${m[2]}`; codeRe = new RegExp(m[0].replace(/[-–\s]+/g, "\\s*[-–]?\\s*"), "i"); out.brand ||= "Benjamin Moore"; }
   if (!out.colorCode && (m = up.match(/\b([A-Z]{1,4}\d{2,3}-\d{1,2}[A-Z]?)\b/)) && !/^(20\d\d)/.test(m[1])) { out.colorCode = m[1]; codeRe = new RegExp(m[1], "i"); }
   if (!out.colorCode && (out.brand === "Benjamin Moore") && (m = up.match(/\b(\d{4})\s*[-–]\s*(\d{2})\b(?!\s*[-–]\s*\d)/))) { out.colorCode = `${m[1]}-${m[2]}`; codeRe = new RegExp(m[1] + "\\s*[-–]\\s*" + m[2]); }
   if (!out.colorCode && (m = up.match(/COLOU?R\s*(?:NO\.?|NUMBER|#|CODE)\s*[:#.\-]?\s*([A-Z0-9][A-Z0-9 \-]{2,13})/))) out.colorCode = m[1].trim();
   // color name: the words next to the code, or after "COLOR NAME"
   const clean = s => titleCase(s.replace(/[^A-Za-z' &\-]/g, " ").replace(/\b(COLOU?R|NAME|NO|NUMBER)\b/gi, " ").replace(/\s+/g, " ").replace(/^[\s\-&']+|[\s\-&']+$/g, "").trim());
-  const bad = /SHERWIN|WILLIAMS|PAINT|LATEX|ACRYL|INTERIOR|EXTERIOR|SATIN|GLOSS|FLAT|MATTE|EGGSHELL|LUSTR|BASE|GALLON|STORE|DATE|FORMULA|PRIMER|DURATION|EMERALD|CASHMERE/i;
-  if ((m = text.match(/COLOU?R\s*NAME\s*[:\-]?\s*([A-Za-z][A-Za-z' &\-]{2,40})/i))) out.colorName = clean(m[1]);
+  const bad = /SHERWIN|WILLIAMS|PAINT|LATEX|ACRYL|INTERIOR|EXTERIOR|SATIN|GLOSS|FLAT|MATTE|EGGSHELL|LUSTR|BASE|GALLON|STORE|DATE|FORMULA|PRIMER|DURATION|EMERALD|CASHMERE|COLORANT/i;
+  if (!out.colorName && (m = text.match(/COLOU?R\s*NAME\s*[:\-]?\s*([A-Za-z][A-Za-z' &\-]{2,40})/i))) out.colorName = clean(m[1]);
   if (!out.colorName && codeRe) {
     const i = lines.findIndex(l => codeRe.test(l));
     if (i >= 0) {
@@ -926,21 +932,32 @@ function parseLabel(raw) {
   if (out.colorName) { out.colorName = out.colorName.split(" ").slice(0, 5).join(" "); if (out.colorName.length < 3) delete out.colorName; }
   // sheen
   for (const [re, name] of [[/SEMI[\s-]*GLOSS/, "Semi-gloss"], [/HIGH[\s-]*GLOSS|\bGLOSS\b/, "Gloss"], [/\bSATIN\b/, "Satin"], [/EGG[\s-]*SHELL|LOW[\s-]*LUSTRE?|LOW[\s-]*LUSTER/, "Eggshell"], [/\bMATTE?\b/, "Matte"], [/ULTRA[\s-]*FLAT|\bFLAT\b/, "Flat"]]) if (re.test(upL)) { out.sheen = name; break; }
-  // product line
+  // product line, interior/exterior, base
   for (const [name, re] of PRODUCT_RES) if (re.test(upL)) { out.product = name; break; }
   if (!out.product && out.brand === "Behr" && /\bULTRA\b/.test(up) && !/ULTRA[\s-]*FLAT/.test(up)) out.product = "Ultra";
-  // size
-  if ((m = up.match(/\b(\d+(?:\.\d+)?)\s*(?:GAL(?:LONS?)?)\b/))) out.size = `${m[1]} gal`;
-  else if (/\bGALLON\b/.test(up)) out.size = "1 gal";
-  else if (/\b(\d+)\s*(?:QT|QUARTS?)\b/.test(up)) out.size = `${up.match(/\b(\d+)\s*(?:QT|QUARTS?)\b/)[1]} qt`;
-  else if (/\bQUART\b|\bQT\b/.test(up)) out.size = "1 qt";
-  else if (/\b(\d+)\s*(?:PT|PINTS?)\b/.test(up)) out.size = `${up.match(/\b(\d+)\s*(?:PT|PINTS?)\b/)[1]} pt`;
-  // notes: interior/exterior and the base
-  const bits = [];
-  if (/\bINT(?:ERIOR)?\b/.test(upL)) bits.push("Interior"); else if (/\bEXT(?:ERIOR)?\b/.test(upL)) bits.push("Exterior");
-  if ((m = text.match(/\bBASE\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9 \-\/]{1,24})/i))) bits.push("Base: " + titleCase(m[1].trim().split(/\s{2,}|\n/)[0]));
-  if (bits.length) out.notes = bits.join(" · ");
+  if (/\bINT(?:ERIOR)?\b/.test(upL)) out.type = "Interior"; else if (/\bEXT(?:ERIOR)?\b/.test(upL)) out.type = "Exterior";
+  if ((m = up.match(BASE_RE))) out.base = titleCase(m[1].replace(/^(EXTR4|XTRA)/, "EXTRA").replace(/\s+/g, " "));
+  else if ((m = text.match(/\bBASE\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9 \-\/]{1,24})/i))) out.base = titleCase(m[1].trim().split(/\s{2,}|\n/)[0]);
+  // what a store needs to find or remake it: order number, store, phone, date mixed, product code
+  if ((m = up.match(/ORDE?R?\S{0,3}\s*#?\s*[:.]?\s*(\d{6,8})\b/))) out.orderNo = m[1];
+  else if ((m = up.match(/^\s*(\d{7})\s*-\s*\d{3}\s*$/m))) out.orderNo = m[1];
+  const top = lines.find(l => /(SHER|CHER|WIL|HIL)/i.test(l) && /\b\d{5,7}\b/.test(l));
+  if (top) { const sm = top.match(/\b(\d{5,7})\b/); out.store = sm[1]; const d = parseDate(top.slice(top.indexOf(sm[0]) + sm[0].length)); if (d) out.mixedDate = d; }
+  if (!out.mixedDate && (m = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/))) { const d = parseDate(`${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${m[3].slice(-2)}`); if (d) out.mixedDate = d; }
+  if ((m = text.match(/\b(\d{3})[-. ](\d{3})[-. ](\d{4})\b/))) out.storePhone = `${m[1]}-${m[2]}-${m[3]}`;
+  if ((m = up.match(/\b([A-Z])([0-9O]{2})([A-Z])([0-9O]{5})\b/))) out.productCode = m[1] + m[2].replace(/O/g, "0") + m[3] + m[4].replace(/O/g, "0");
   return out;
+}
+// several reads of the same label are combined: the most common value wins, and other readings are kept so you can pick between them
+function mergeReads(reads) {
+  const out = {}, alts = {};
+  for (const k of new Set(reads.flatMap(r => Object.keys(r.p)))) {
+    const tally = new Map();
+    reads.forEach(r => { const v = r.p[k]; if (v) { const t = tally.get(v) || { n: 0, best: 0 }; t.n++; t.best = Math.max(t.best, r.conf || 0); tally.set(v, t); } });
+    const ranked = [...tally.entries()].sort((a, b) => b[1].n - a[1].n || b[1].best - a[1].best);
+    out[k] = ranked[0][0]; if (ranked.length > 1) alts[k] = ranked.slice(1).map(x => x[0]);
+  }
+  return { out, alts };
 }
 
 
@@ -949,43 +966,66 @@ let tessPromise = null;
 function loadTesseract() {
   return tessPromise ||= new Promise((res, rej) => { if (window.Tesseract) return res(); const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload = res; sc.onerror = () => { tessPromise = null; rej(new Error("offline")); }; document.head.append(sc); });
 }
-async function prepForOcr(blob) { // bigger, grey, and contrast-stretched: makes small printed text much easier to read
-  const bmp = await createImageBitmap(blob), k = Math.min(2, 2200 / Math.max(bmp.width, bmp.height)), w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
-  const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.drawImage(bmp, 0, 0, w, h);
-  const im = x.getImageData(0, 0, w, h), d = im.data, hist = new Uint32Array(256);
-  for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = d[i + 1] = d[i + 2] = g; hist[g]++; }
-  let lo = 0, hi = 255, acc = 0; const tot = w * h;
-  while (lo < 255 && (acc += hist[lo]) < tot * 0.02) lo++; acc = 0; while (hi > 0 && (acc += hist[hi]) < tot * 0.02) hi--;
-  const sc = 255 / Math.max(1, hi - lo);
-  for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, (d[i] - lo) * sc)); d[i] = d[i + 1] = d[i + 2] = v; }
+const clampN = (x, a, b) => Math.max(a, Math.min(b, x));
+function enhanceCanvas(c, mode) { // grey, contrast-stretched; optionally black-and-white or sharpened
+  const x = c.getContext("2d", { willReadFrequently: true }), w = c.width, h = c.height, im = x.getImageData(0, 0, w, h), d = im.data, n = w * h, g = new Uint8Array(n), hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) { const v = (d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114) | 0; g[i] = v; hist[v]++; }
+  let lo = 0, hi = 255, acc = 0; while (lo < 255 && (acc += hist[lo]) < n * 0.02) lo++; acc = 0; while (hi > 0 && (acc += hist[hi]) < n * 0.02) hi--;
+  const sc = 255 / Math.max(1, hi - lo); for (let i = 0; i < n; i++) g[i] = clampN((g[i] - lo) * sc, 0, 255);
+  if (mode === "otsu") { const h2 = new Uint32Array(256); for (let i = 0; i < n; i++) h2[g[i]]++; let sum = 0; for (let t = 0; t < 256; t++) sum += t * h2[t]; let sB = 0, wB = 0, best = 0, thr = 128; for (let t = 0; t < 256; t++) { wB += h2[t]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += t * h2[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) ** 2; if (v > best) { best = v; thr = t; } } for (let i = 0; i < n; i++) g[i] = g[i] > thr ? 255 : 0; }
+  if (mode === "sharp") { const o = g.slice(); for (let yy = 1; yy < h - 1; yy++) for (let xx = 1; xx < w - 1; xx++) { const i = yy * w + xx; g[i] = clampN(5 * o[i] - o[i - 1] - o[i + 1] - o[i - w] - o[i + w], 0, 255); } }
+  for (let i = 0; i < n; i++) { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = g[i]; d[i * 4 + 3] = 255; }
   x.putImageData(im, 0, 0); return new Promise(r => c.toBlob(r, "image/png"));
 }
-async function readLabelText(blob, onProgress) {
-  await loadTesseract();
-  const worker = await Tesseract.createWorker("eng", 1, { workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js", corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0", langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int", logger: onProgress });
-  try { const { data } = await worker.recognize(await prepForOcr(blob)); return data.text; } finally { await worker.terminate(); }
+async function prepForOcr(blob) { // the whole photo, grey and contrast-stretched (used to find where the sticker is)
+  const bmp = await createImageBitmap(blob), k = Math.min(2, 2200 / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k); c.getContext("2d", { willReadFrequently: true }).drawImage(bmp, 0, 0, c.width, c.height); return enhanceCanvas(c, "gray");
 }
-const OCR_FIELDS = { brand: "#pf-brand", product: "#pf-product", colorCode: "#pf-code", colorName: "#pf-cname", sheen: "#pf-sheen", size: "#pf-size", notes: "#pf-notes" };
-let ocrBusy = false, ocrNote = "", paintHooks = null, ocrFilled = [];
+async function cropForOcr(orig, r, scale, mode) { // just the sticker, at a size the reader likes
+  const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(r.w * scale)); c.height = Math.max(1, Math.round(r.h * scale));
+  const x = c.getContext("2d", { willReadFrequently: true }); x.imageSmoothingQuality = "high"; x.drawImage(orig, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height); return enhanceCanvas(c, mode);
+}
+async function readLabelReads(blob, status) {
+  await loadTesseract(); status("Loading the label reader (first time only)…");
+  const w = await Tesseract.createWorker("eng", 1, { workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js", corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0", langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int" });
+  try {
+    status("Looking for the label…");
+    const orig = await createImageBitmap(blob), prep = await prepForOcr(blob), prepBmp = await createImageBitmap(prep);
+    const r1 = await w.recognize(prep, {}, { blocks: true, text: true }), reads = [{ text: r1.data.text, conf: r1.data.confidence }];
+    const good = (r1.data.words || []).filter(x => x.confidence >= 72 && /[A-Za-z0-9]{3,}/.test(x.text));
+    if (good.length >= 6) { // found the sticker: crop to it and read it again, a few ways, at the size where digits come out best
+      const K = orig.width / prepBmp.width, bb = good.reduce((a, x) => ({ x0: Math.min(a.x0, x.bbox.x0), y0: Math.min(a.y0, x.bbox.y0), x1: Math.max(a.x1, x.bbox.x1), y1: Math.max(a.y1, x.bbox.y1) }), { x0: 1e9, y0: 1e9, x1: 0, y1: 0 });
+      const hs = good.map(x => x.bbox.y1 - x.bbox.y0).sort((a, b) => a - b)[good.length >> 1] * K, base = clampN(34 / Math.max(8, hs), 0.5, 1.8), mx = (bb.x1 - bb.x0) * 0.06, my = (bb.y1 - bb.y0) * 0.05;
+      const x0 = clampN((bb.x0 - mx) * K, 0, orig.width - 2), y0 = clampN((bb.y0 - my) * K, 0, orig.height - 2), x1 = clampN((bb.x1 + mx) * K, x0 + 1, orig.width), y1 = clampN((bb.y1 + my) * K, y0 + 1, orig.height), region = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      await w.setParameters({ tessedit_pageseg_mode: "6" }); let n = 0;
+      for (const [mult, mode] of [[1, "gray"], [0.8, "sharp"], [1.25, "otsu"]]) { status(`Reading the label… (${++n} of 3)`); const r = await w.recognize(await cropForOcr(orig, region, base * mult, mode)); reads.push({ text: r.data.text, conf: r.data.confidence }); }
+    }
+    return reads;
+  } finally { await w.terminate(); }
+}
+const OCR_FIELDS = { brand: "#pf-brand", product: "#pf-product", type: "#pf-type", colorCode: "#pf-code", colorName: "#pf-cname", sheen: "#pf-sheen", base: "#pf-base", orderNo: "#pf-order", mixedDate: "#pf-mixed", store: "#pf-store", storePhone: "#pf-storephone", productCode: "#pf-pcode" };
+let ocrBusy = false, ocrNote = "", paintHooks = null, ocrFilled = [], ocrAlts = {};
 async function runOcr(p, manual) {
   if (ocrBusy) return;
   const ph = state.photos.find(x => x.id === p.photoTop && live(x)); if (!ph) return toast("Take a photo of the label first");
   const status = m => { const el = $("#ocr-status"); if (el) el.textContent = m; };
-  ocrBusy = true; ocrNote = ""; status("Getting ready to read the label…"); { const b = $("#ocr-btn"); if (b) b.disabled = true; }
+  ocrBusy = true; ocrNote = ""; ocrAlts = {}; status("Getting ready to read the label…"); { const b = $("#ocr-btn"); if (b) b.disabled = true; }
   try {
     const blob = await (await fetch(await photoUrl(ph))).blob();
-    const text = await readLabelText(blob, m => { if (m.status === "recognizing text") status(`Reading the label… ${Math.round(m.progress * 100)}%`); else status("Loading the label reader (first time only)…"); });
-    const parsed = parseLabel(text), found = Object.keys(parsed);
-    p.labelText = text; touch(p);
+    const reads = await readLabelReads(blob, status);
+    const { out: parsed, alts } = mergeReads(reads.map(r => ({ p: parseLabel(r.text), conf: r.conf }))), found = Object.keys(parsed);
+    p.labelText = reads.slice().sort((a, b) => b.conf - a.conf)[0].text; touch(p);
     if (!found.length) ocrNote = "Couldn't find paint details on that photo. Try a closer, flatter photo of the sticker so it fills the picture, or type them in.";
     else {
       const cur = k => { const el = $(OCR_FIELDS[k]); return (el ? el.value : String(p[k] || "")).trim(); };
-      const conflict = manual && found.some(k => k !== "notes" && cur(k) && cur(k) !== parsed[k]);
+      const conflict = manual && found.some(k => cur(k) && cur(k) !== parsed[k]);
       const overwrite = manual && (!conflict || confirm("Replace the details you typed with what the label says?"));
       let n = 0; ocrFilled = [];
-      for (const k of found) { if (cur(k) && !overwrite) continue; if (cur(k) === parsed[k]) continue; const el = $(OCR_FIELDS[k]); if (el) { el.value = parsed[k]; el.classList.add("filled"); el.addEventListener("input", () => el.classList.remove("filled"), { once: true }); } p[k] = parsed[k]; ocrFilled.push(k); n++; }
+      for (const k of found) { if (cur(k) && !overwrite) continue; if (cur(k) === parsed[k]) continue; const el = $(OCR_FIELDS[k]); if (el) el.value = parsed[k]; p[k] = parsed[k]; ocrFilled.push(k); n++; }
+      ocrAlts = Object.fromEntries(Object.entries(alts).filter(([k]) => ["colorCode", "colorName", "orderNo", "productCode"].includes(k))); // only the details that matter if they're wrong
       paintHooks?.readForm?.(); touch(p);
-      ocrNote = n ? `✓ Filled in ${n} detail${n === 1 ? "" : "s"} from the label (green). Please double-check them.` : "Everything the label said is already filled in.";
+      const unsure = Object.keys(ocrAlts).filter(k => ["colorCode", "orderNo", "productCode"].includes(k));
+      ocrNote = (n ? `✓ Filled in ${n} detail${n === 1 ? "" : "s"} from the label (green). ` : "Everything the label said is already filled in. ") + (unsure.length ? "The reads didn't agree on the color code or an order number, so check those against the photo: tap an \"Also read\" choice if it's the right one." : "Please double-check them against the photo.");
       if (n) toast("Filled in from the label — please double-check");
     }
     save();
@@ -1002,30 +1042,32 @@ const SHEENS = ["Flat", "Matte", "Eggshell", "Satin", "Semi-gloss", "Gloss"];
 const paintCard = p => `<div class="card tap" data-paint="${p.id}"><div class="row top" style="gap:12px">
   <div class="thumb sm" data-pphoto="${p.photoFront || p.photoTop || ""}" style="--h:${hue(p.brand || "paint")}"><span>🎨</span></div>
   <div class="grow"><div class="street">${esc(paintName(p))}</div><div>${paintColor(p) ? esc(paintColor(p)) : `<span class="muted">No color yet</span>`}</div>
-    <div class="muted">${[p.sheen, p.size].filter(Boolean).map(esc).join(" · ")}</div>
+    <div class="muted">${[p.sheen, p.type, p.base].filter(Boolean).map(esc).join(" · ")}</div>
     ${areasOf(p).length ? `<div class="jc-meta">${areasOf(p).map(a => `<span class="chip full">${esc(a)}</span>`).join("")}</div>` : ""}</div></div></div>`;
 function tabPaints(box, s) {
   const ps = paintsOf(s), byArea = new Map();
   ps.forEach(p => { const as = areasOf(p); (as.length ? as : ["Not assigned yet"]).forEach(a => (byArea.get(a) || byArea.set(a, []).get(a)).push(p)); });
   box.innerHTML = `
     <div class="row" style="margin:0 4px 10px"><h2 style="margin:0">Paints used</h2><button class="small primary" id="pt-add">＋ Add paint</button></div>
-    ${ps.length ? ps.map(paintCard).join("") : `<div class="empty"><span class="big-emoji">🎨</span>No paints yet.<br>Tap “Add paint”, take a photo of the bucket and the lid, then type what the lid says.</div>`}
+    ${ps.length ? ps.map(paintCard).join("") : `<div class="empty"><span class="big-emoji">🎨</span>No paints yet.<br>Tap “Add paint”, take a photo of the bucket and the color label, and the app reads it.</div>`}
     ${byArea.size ? `<div class="card"><h3>📋 What was used where</h3>${[...byArea.entries()].map(([a, list]) => `<div class="line" style="align-items:flex-start"><strong>${esc(a)}</strong><span style="text-align:right">${list.map(p => `<div>${esc(paintColor(p) || paintName(p))}${p.sheen ? ` <span class="muted">${esc(p.sheen)}</span>` : ""}</div>`).join("")}</span></div>`).join("")}</div>` : ""}
     <div class="card"><h3>📝 Other paint notes</h3><textarea id="j-paint" style="min-height:70px" placeholder="Anything else: primer, caulk, tape, how much was left over…">${esc(s.paint)}</textarea>
       <div class="actions"><button class="primary small" id="pt-notes">Save</button></div></div>`;
-  $("#pt-add").onclick = () => { const p = touch({ id: uid(), siteId: s.id, brand: "", product: "", colorCode: "", colorName: "", sheen: "", size: "", areas: "", photoFront: "", photoTop: "", notes: "", deleted: false }); state.paints.push(p); save(); openPaint = p.id; render(); window.scrollTo(0, 0); };
+  $("#pt-add").onclick = () => { const p = touch({ id: uid(), siteId: s.id, brand: "", product: "", type: "", colorCode: "", colorName: "", sheen: "", base: "", orderNo: "", mixedDate: "", store: "", storePhone: "", productCode: "", formula: "", size: "", areas: "", photoFront: "", photoTop: "", notes: "", labelText: "", deleted: false }); state.paints.push(p); save(); openPaint = p.id; render(); window.scrollTo(0, 0); };
   box.querySelectorAll("[data-paint]").forEach(c => c.onclick = () => { openPaint = c.dataset.paint; render(); window.scrollTo(0, 0); });
   $("#pt-notes").onclick = () => { s.paint = $("#j-paint").value; touch(s); save(); toast("Saved"); };
 }
+const reorderText = (p, s) => [`Paint to re-order — ${streetOf(s.address)}`, [paintName(p), p.sheen, p.type].filter(Boolean).join(" · "), paintColor(p) ? `Color: ${paintColor(p)}` : "", p.base ? `Base: ${p.base}` : "", [p.orderNo ? `Order #${p.orderNo}` : "", p.mixedDate ? `mixed ${p.mixedDate}` : "", p.store ? `store ${p.store}` : "", p.storePhone].filter(Boolean).join(" · "), p.productCode ? `Product code: ${p.productCode}` : "", p.formula ? `Formula:\n${p.formula}` : "", areasOf(p).length ? `Used for: ${areasOf(p).join(", ")}` : ""].filter(Boolean).join("\n");
 function viewPaint(app) {
   const p = state.paints.find(x => x.id === openPaint && live(x)), s = p && jobById(p.siteId);
   if (!p || !s) { openPaint = null; return render(); }
   let areas = areasOf(p);
   const uniq = k => [...new Set([...state.paints.filter(live).map(x => x[k]).filter(Boolean)])];
-  const slot = (key, label, extra = "") => { const pid = p[key]; return `<div><div class="muted" style="font-weight:700;margin-bottom:6px">${label}</div>
+  const slot = (key, label) => { const pid = p[key]; return `<div><div class="muted" style="font-weight:700;margin-bottom:6px">${label}</div>
     <div class="pslot" data-slot="${key}" data-pphoto="${pid}" style="--h:${hue(key)}"><span>📷</span></div>
     <div class="row" style="gap:6px;margin-top:6px"><label class="btn soft small grow">📷 Take<input type="file" accept="image/*" capture="environment" data-file="${key}" style="display:none"></label><label class="btn small grow">🖼 Choose<input type="file" accept="image/*" data-file="${key}" style="display:none"></label></div>
-    ${pid ? `<button class="small danger block" data-rm="${key}" style="margin-top:6px">Remove photo</button>` : ""}${extra}</div>`; };
+    ${pid ? `<button class="small danger block" data-rm="${key}" style="margin-top:6px">Remove photo</button>` : ""}</div>`; };
+  const sel = (id, list, cur) => `<select id="${id}"><option value="">—</option>${list.map(x => `<option ${cur === x ? "selected" : ""}>${x}</option>`).join("")}</select>`;
   app.innerHTML = `
     <button class="small" id="back">← Paints · ${esc(streetOf(s.address))}</button>
     <div class="card" style="margin-top:10px"><h3>📷 Photos of the bucket</h3>
@@ -1033,20 +1075,33 @@ function viewPaint(app) {
       ${p.photoTop ? `<button class="primary block" id="ocr-btn" style="margin-top:12px">✨ Read the label and fill in the details</button>` : `<div class="muted" style="margin-top:10px">Take a photo of the store's <b>color label sticker</b> (the printed receipt on the lid). Hold the phone straight above it so the sticker fills the picture. The app will read it for you.</div>`}
       <div id="ocr-status" class="ocrnote">${esc(ocrNote)}</div>
       ${p.labelText ? `<details style="margin-top:6px"><summary>What the app read from the label</summary><pre class="rawtext">${esc(p.labelText)}</pre></details>` : ""}</div>
-    <div class="card"><h3>🎨 Paint details</h3>
-      <div class="two"><div><label style="margin-top:0">Brand</label><input id="pf-brand" list="dl-brand" value="${esc(p.brand)}" autocapitalize="words" autocomplete="off"></div><div><label style="margin-top:0">Product</label><input id="pf-product" list="dl-product" value="${esc(p.product)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Duration"></div></div>
-      <div class="two"><div><label>Color code</label><input id="pf-code" value="${esc(p.colorCode)}" autocapitalize="characters" autocomplete="off" placeholder="e.g. SW 7008"></div><div><label>Color name</label><input id="pf-cname" value="${esc(p.colorName)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Alabaster"></div></div>
-      <div class="two"><div><label>Sheen</label><select id="pf-sheen"><option value="">—</option>${SHEENS.map(x => `<option ${p.sheen === x ? "selected" : ""}>${x}</option>`).join("")}</select></div><div><label>Size / amount</label><input id="pf-size" value="${esc(p.size)}" autocomplete="off" placeholder="e.g. 5 gal"></div></div>
+    <div class="card"><h3>🎨 Paint</h3>
+      <div class="two"><div><label style="margin-top:0">Brand</label><input id="pf-brand" list="dl-brand" value="${esc(p.brand)}" autocapitalize="words" autocomplete="off"></div><div><label style="margin-top:0">Product</label><input id="pf-product" list="dl-product" value="${esc(p.product)}" autocapitalize="words" autocomplete="off" placeholder="e.g. A-100"></div></div>
+      <div class="two"><div><label>Color code</label><input id="pf-code" value="${esc(p.colorCode)}" autocapitalize="characters" autocomplete="off" placeholder="e.g. SW 7552"></div><div><label>Color name</label><input id="pf-cname" value="${esc(p.colorName)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Bauhaus Buff"></div></div>
+      <div class="two"><div><label>Sheen</label>${sel("pf-sheen", SHEENS, p.sheen)}</div><div><label>Interior / exterior</label>${sel("pf-type", ["Interior", "Exterior"], p.type)}</div></div>
+      <label>Base</label><input id="pf-base" value="${esc(p.base)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Extra White">
       <datalist id="dl-brand">${[...new Set([...uniq("brand"), ...BRANDS])].map(x => `<option value="${esc(x)}">`).join("")}</datalist><datalist id="dl-product">${[...new Set([...uniq("product"), ...PRODUCTS])].map(x => `<option value="${esc(x)}">`).join("")}</datalist></div>
+    <div class="card"><h3>🔁 To order it again</h3><div class="muted">What a store needs to mix the same paint. The formula is in the photo, so you don't have to type it.</div>
+      <div class="two"><div><label>Order #</label><input id="pf-order" value="${esc(p.orderNo)}" inputmode="numeric" autocomplete="off"></div><div><label>Date mixed</label><input id="pf-mixed" value="${esc(p.mixedDate)}" autocomplete="off" placeholder="10/15/26"></div></div>
+      <div class="two"><div><label>Store #</label><input id="pf-store" value="${esc(p.store)}" inputmode="numeric" autocomplete="off"></div><div><label>Store phone</label><input id="pf-storephone" type="tel" value="${esc(p.storePhone)}" autocomplete="off"></div></div>
+      <label>Product code</label><input id="pf-pcode" value="${esc(p.productCode)}" autocapitalize="characters" autocomplete="off" placeholder="e.g. A06W00351">
+      <label>Formula (optional)</label><textarea id="pf-formula" style="min-height:64px" placeholder="Only if you want it written down">${esc(p.formula)}</textarea>
+      <label>Size (optional)</label><input id="pf-size" value="${esc(p.size)}" autocomplete="off" placeholder="e.g. 1 gal">
+      <div class="actions"><button class="primary" id="pf-share">📤 Send re-order info</button>${digits(p.storePhone) ? `<a class="btn soft" href="tel:${digits(p.storePhone)}">📞 Call the store</a>` : ""}</div></div>
     <div class="card"><h3>📍 Used for</h3><div class="muted">Tap to choose, or type your own.</div><div id="pf-areas"></div></div>
     <div class="card"><h3>📝 Notes (optional)</h3><textarea id="pf-notes" style="min-height:70px" placeholder="Tinted at the store, thinned, 2 coats…">${esc(p.notes)}</textarea>
       <div class="actions"><button class="primary" id="pf-save">Save paint</button><button class="danger" id="pf-del">Delete paint</button></div></div>`;
   ocrNote = "";
-  const readForm = () => { Object.assign(p, { brand: $("#pf-brand").value.trim(), product: $("#pf-product").value.trim(), colorCode: $("#pf-code").value.trim(), colorName: $("#pf-cname").value.trim(), sheen: $("#pf-sheen").value, size: $("#pf-size").value.trim(), notes: $("#pf-notes").value, areas: areas.join(" | ") }); touch(p); };
+  const V = id => $(id).value.trim();
+  const readForm = () => { Object.assign(p, { brand: V("#pf-brand"), product: V("#pf-product"), colorCode: V("#pf-code"), colorName: V("#pf-cname"), sheen: $("#pf-sheen").value, type: $("#pf-type").value, base: V("#pf-base"), orderNo: V("#pf-order"), mixedDate: V("#pf-mixed"), store: V("#pf-store"), storePhone: V("#pf-storephone"), productCode: V("#pf-pcode"), formula: $("#pf-formula").value.trim(), size: V("#pf-size"), notes: $("#pf-notes").value, areas: areas.join(" | ") }); touch(p); };
   paintHooks = { readForm };
-  for (const k of ocrFilled) { const el = $(OCR_FIELDS[k]); if (el) { el.classList.add("filled"); el.addEventListener("input", () => el.classList.remove("filled"), { once: true }); } } // fields the label reader filled stay green until you change them
-  const isEmpty = () => !(p.brand || p.product || p.colorCode || p.colorName || p.sheen || p.size || p.notes || p.areas || p.photoFront || p.photoTop);
-  const close = () => { readForm(); if (isEmpty()) p.deleted = true; save(); openPaint = null; jobTab = "paints"; paintHooks = null; ocrFilled = []; render(); };
+  const mark = el => { el.classList.add("filled"); el.addEventListener("input", () => el.classList.remove("filled"), { once: true }); };
+  for (const k of ocrFilled) { const el = $(OCR_FIELDS[k]); if (el) mark(el); } // fields the label reader filled stay green until you change them
+  for (const [k, list] of Object.entries(ocrAlts)) { const el = $(OCR_FIELDS[k]); if (!el) continue; const rest = list.filter(v => v !== el.value); if (rest.length) el.insertAdjacentHTML("afterend", `<div class="alts">Also read: ${rest.map(v => `<button class="chip altbtn" data-alt="${k}" data-v="${esc(v)}">${esc(v)}</button>`).join(" ")}</div>`); }
+  app.querySelectorAll("[data-alt]").forEach(b => b.onclick = () => { const el = $(OCR_FIELDS[b.dataset.alt]); el.value = b.dataset.v; mark(el); b.closest(".alts").remove(); });
+  const isEmpty = () => !(p.brand || p.product || p.colorCode || p.colorName || p.sheen || p.type || p.base || p.orderNo || p.store || p.productCode || p.size || p.notes || p.areas || p.photoFront || p.photoTop);
+  const leave = () => { openPaint = null; jobTab = "paints"; paintHooks = null; ocrFilled = []; ocrAlts = {}; };
+  const close = () => { readForm(); if (isEmpty()) p.deleted = true; save(); leave(); render(); };
   const drawAreas = () => {
     const recent = uniq("areas").flatMap(x => x.split("|").map(y => y.trim())).filter(Boolean), sug = [...new Set([...recent, ...SURFACES, ...ROOMS])].filter(a => !areas.includes(a));
     $("#pf-areas").innerHTML = `<div class="crewchips" style="margin-top:10px">${areas.map(a => `<button class="on" data-ar="${esc(a)}">${esc(a)} ✕</button>`).join("") || `<span class="muted">Nothing chosen yet</span>`}</div>
@@ -1060,18 +1115,19 @@ function viewPaint(app) {
   drawAreas();
   $("#back").onclick = close;
   if ($("#ocr-btn")) $("#ocr-btn").onclick = () => runOcr(p, true);
+  $("#pf-share").onclick = async () => { readForm(); save(); const t = reorderText(p, s); if (navigator.share) { try { await navigator.share({ title: "Paint to re-order", text: t }); } catch {} } else { try { await navigator.clipboard.writeText(t); toast("Copied. Paste it into a message."); } catch { prompt("Copy this text:", t); } } };
   $("#pf-save").onclick = () => { readForm(); save(); toast("Paint saved"); close(); };
-  $("#pf-del").onclick = () => { if (!confirm("Delete this paint?")) return; for (const k of ["photoFront", "photoTop"]) { const ph = state.photos.find(x => x.id === p[k]); if (ph) touch(Object.assign(ph, { deleted: true })); } touch(Object.assign(p, { deleted: true })); save(); openPaint = null; jobTab = "paints"; paintHooks = null; render(); };
+  $("#pf-del").onclick = () => { if (!confirm("Delete this paint?")) return; for (const k of ["photoFront", "photoTop"]) { const ph = state.photos.find(x => x.id === p[k]); if (ph) touch(Object.assign(ph, { deleted: true })); } touch(Object.assign(p, { deleted: true })); save(); leave(); render(); };
   app.querySelectorAll("[data-file]").forEach(inp => inp.onchange = async e => {
     const f = e.target.files[0], key = inp.dataset.file; if (!f) return; readForm();
     try {
       const blob = await resizeImage(f, key === "photoTop" ? 2400 : 1600), id = uid(); await blobPut(id, blob);
       const old = state.photos.find(x => x.id === p[key]); if (old) touch(Object.assign(old, { deleted: true }));
-      state.photos.push(touch({ id, siteId: p.siteId, taken: todayStr(), driveId: "", kind: "paint", deleted: false })); p[key] = id; if (key === "photoTop") p.labelText = ""; touch(p); save(); render();
+      state.photos.push(touch({ id, siteId: p.siteId, taken: todayStr(), driveId: "", kind: "paint", deleted: false })); p[key] = id; if (key === "photoTop") { p.labelText = ""; ocrAlts = {}; } touch(p); save(); render();
       if (key === "photoTop") runOcr(p, false); // reads the label automatically; only fills boxes that are still empty
     } catch { toast("That file isn't a photo"); }
   });
-  app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { readForm(); const ph = state.photos.find(x => x.id === p[b.dataset.rm]); if (ph) touch(Object.assign(ph, { deleted: true })); p[b.dataset.rm] = ""; if (b.dataset.rm === "photoTop") p.labelText = ""; touch(p); save(); render(); });
+  app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { readForm(); const ph = state.photos.find(x => x.id === p[b.dataset.rm]); if (ph) touch(Object.assign(ph, { deleted: true })); p[b.dataset.rm] = ""; if (b.dataset.rm === "photoTop") { p.labelText = ""; ocrAlts = {}; } touch(p); save(); render(); });
   app.querySelectorAll("[data-slot]").forEach(el => el.onclick = () => { if (!el.dataset.url) return; const m = document.createElement("div"); m.className = "modal"; m.innerHTML = `<img src="${el.dataset.url}" alt="">`; m.onclick = () => m.remove(); document.body.append(m); });
 }
 
@@ -1216,7 +1272,7 @@ const COLS = {
   Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "lat", "lng", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
   Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "updated", "deleted"],
-  Paints: ["id", "siteId", "address", "brand", "product", "colorCode", "colorName", "sheen", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
+  Paints: ["id", "siteId", "address", "brand", "product", "type", "colorCode", "colorName", "sheen", "base", "orderNo", "mixedDate", "store", "storePhone", "productCode", "formula", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
   Contacts: ["id", "siteId", "address", "name", "role", "phone", "updated", "deleted"],
   People: ["id", "name", "updated", "deleted"],

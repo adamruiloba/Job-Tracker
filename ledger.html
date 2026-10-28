@@ -187,11 +187,12 @@ function viewPaints(js) {
     rows.push(`<tr class="month"><td class="first" colspan="3">${esc(a.s.address)}</td></tr>`);
     for (const p of ps) {
       const areas = String(p.areas || "").split("|").map(x => x.trim()).filter(Boolean), name = [p.brand, p.product].filter(Boolean).join(" ") || "Paint", color = [p.colorCode, p.colorName].filter(Boolean).join(" · ");
-      lastCsvRows.push([a.s.address, p.brand, p.product, p.colorCode, p.colorName, p.sheen, p.size, areas.join("; "), (p.notes || "").replace(/\s+/g, " ")]);
-      rows.push(`<tr><td class="first"><b>${esc(name)}</b>${color ? `<div>${esc(color)}</div>` : ""}</td><td>${esc([p.sheen, p.size].filter(Boolean).join(" · "))}</td><td>${areas.map(esc).join(", ") || "—"}</td></tr>`);
+      lastCsvRows.push([a.s.address, p.brand, p.product, p.type, p.colorCode, p.colorName, p.sheen, p.base, p.orderNo, p.mixedDate, p.store, p.storePhone, p.productCode, areas.join("; "), (p.notes || "").replace(/\s+/g, " ")]);
+      const reorder = [p.orderNo ? "Order #" + p.orderNo : "", p.mixedDate, p.store ? "Store " + p.store : "", p.storePhone].filter(Boolean).join(" · ");
+      rows.push(`<tr><td class="first"><b>${esc(name)}</b>${color ? `<div>${esc(color)}</div>` : ""}${reorder ? `<div class="muted" style="font-size:12px">${esc(reorder)}</div>` : ""}</td><td>${esc([p.sheen, p.type, p.base].filter(Boolean).join(" · "))}</td><td>${areas.map(esc).join(", ") || "—"}</td></tr>`);
     }
   }
-  return table([["Paint"], ["Sheen · size"], ["Used for"]], rows, { note: "Every paint logged on these jobs, with where it was used." });
+  return table([["Paint"], ["Sheen · type · base"], ["Used for"]], rows, { note: "Every paint logged on these jobs, with where it was used." });
 }
 
 /* DAY × JOB GRID */
@@ -217,7 +218,7 @@ function wireGrid() { const g = $("#gm"); if (g) g.onchange = e => { gridMonth =
 
 /* CSV / events */
 let lastCsvRows = [], lastCsvHead = null;
-const HEADS = { paint: ["Job", "Brand", "Product", "Color code", "Color name", "Sheen", "Size", "Used for", "Notes"],  job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
+const HEADS = { paint: ["Job", "Brand", "Product", "Type", "Color code", "Color name", "Sheen", "Base", "Order #", "Date mixed", "Store", "Store phone", "Product code", "Used for", "Notes"],  job: ["Job", "Status", "First day", "Last day", "Days", "Hours", "Job pay", "Received", "Balance", "$/hr"], day: ["Date", "Job", "In", "Out", "Hours", "Crew size", "Crew", "Day pay", "Notes"] };
 const _draw = draw; draw = function () { lastCsvRows = []; lastCsvHead = null; _draw(); };
 function setView(v) { view = v; draw(); }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setView(b.dataset.v));
