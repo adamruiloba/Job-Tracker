@@ -7,12 +7,12 @@ One file: `index.html`. Hosted for free with GitHub Pages, data stored in **your
 1. **Clock tab**: type the job's address and tap **Clock In**, or tap **Clock in** next to one of your jobs. Opening a job never clocks you in; only a Clock In button does. While you're clocked in, tap **Edit** to say who's working. **Clock Out** is one tap, and the app suggests Full or Half day from your hours (you can change it).
 2. **Calendar tab**: a month view (or week view) like Google Calendar. Each day shows a photo tile for every job you worked. Tap a day to see the jobs, times, full or half day, crew, pay, and tags like "Day 2 of 3", "🚩 Started" and "🏁 Finished".
 3. **Jobs tab**: one card per job with its house photo, owner, status, dates, and pay. **Search** by owner name, phone, address, paint, notes, contacts, or crew name. Opening a job shows:
-   - A **photo banner** (add or change it with the 📷 button). Under it: **Clock in**, **Directions**, **Call**, **Finish**.
+   - A **photo banner** (add or change it with the 📷 button). Under it: **Clock in**, **Directions**, **Call**, **Finish**, then six big buttons that are always visible: **Details, Days, Photos, Paints, Notes, Pay**. Each shows a live summary ("3 days", "$200 due"…).
    - **Started / Finished / Took**: when the job began, ended, and how many days and hours it took.
    - **Details**: owner (name, phone, special info), paint and what was done, address.
    - **Days**: each day with Full/Half, its pay rate, the crew who worked, and optional notes on what each person did.
-   - **Photos**: tap ★ to pick the cover photo.
-   - **🎨 Paints**: a ledger of the paint used on the job. Tap **Add paint**, take a photo of the **front of the bucket** and the **top of the lid** (where the code is), then type the details from the lid: brand, product, color code and name, sheen, and size. Tap names to say **what it was used for** (walls, trim, doors, master bedroom, laundry room…) or type your own. The tab also shows **what was used where**, area by area. The Paints view in the ledger lists every paint across your jobs. (The app doesn't read the lid code from the photo; you type it in while the photo is right in front of you.)
+   - **Photos**: filed as **Before / During / After / Issues**. Pick the type, then take or choose photos. Filter by type, tap a photo to change its type, add a caption, make it the cover, or delete it. In Google Drive they land in matching folders inside the job's folder.
+   - **🎨 Paints**: a ledger of the paint used on the job. Tap **Add paint** and photograph the **front of the bucket** and the **color label** (the receipt sticker the store prints and sticks on the lid). The app **reads the label for you** (brand, product, color code and name, sheen, size, interior/exterior and base) and fills in the boxes, shown in green so you can check them. Tap **✨ Read the label** to read it again. If something is wrong, just fix it. Then tap names to say **what it was used for** (walls, trim, doors, master bedroom, laundry room…) or type your own. The tab also shows **what was used where**.
    - **Notes**: dated notes and other contacts.
    - **Pay**: pay **by the day** (each day has its own rate) or **one price** for the whole job, plus what you've received and what's still owed.
 4. **Pay tab**: owed and received totals, and what's waiting on payment. Links to the **ledger** and the **report**.
@@ -52,3 +52,8 @@ The app only has the `drive.file` permission, so it can only see files it create
 - It works offline and saves on the phone first. Tap **Sync** (top right) when you have signal. It also syncs by itself a few seconds after changes while you're signed in.
 - The Google Sheet is readable by you. Open it any time, or share it with someone.
 - Tap **🧭 Directions** on a job (on the Jobs list, the job page, or the Clock tab) to open Google Maps directions to the address.
+
+## About reading paint labels
+- The label reader runs **on your phone**. The photo is not uploaded anywhere. The first time you use it, the phone downloads the reader (a few MB), so you need internet then. After that it's fast.
+- Best results: lay the sticker flat, hold the phone straight above it, fill the picture with the sticker, and avoid glare. If it can't find a paint code, it says so, and you can type the details.
+- It is built for Sherwin-Williams stickers and also recognizes Behr and Benjamin Moore codes. It's always worth a quick look before you save.

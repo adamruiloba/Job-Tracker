@@ -84,6 +84,14 @@
   .banner .b-chips { position:absolute; top:12px; left:12px; display:flex; gap:6px; flex-wrap:wrap; max-width:60%; }
   .banner .b-cam { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.5); color:#fff; border-radius:99px; padding:7px 13px; font-size:13px; font-weight:700; cursor:pointer; }
   .pslot { aspect-ratio:1; border-radius:16px; background-color:hsl(var(--h) var(--tile-s) var(--tile-l)); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; font-size:36px; cursor:pointer; }
+  .sections { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+  .sec { flex-direction:column; gap:1px; padding:10px 4px; min-height:84px; background:var(--card); box-shadow:var(--shadow); border-radius:16px; color:var(--ink); }
+  .sec .si { font-size:24px; line-height:1.1; } .sec .sl { font-size:14px; font-weight:800; }
+  .sec .sn { font-size:12px; color:var(--muted); font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 4px; }
+  .sec.on { background:var(--brand); color:#fff; } .sec.on .sn { color:rgba(255,255,255,.88); }
+  input.filled, select.filled, textarea.filled { background-color:var(--good-soft); border-color:var(--good); }
+  .rawtext { white-space:pre-wrap; font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace; background:var(--field); border-radius:10px; padding:10px; margin:6px 0 0; user-select:text; max-height:220px; overflow:auto; }
+  .ocrnote { margin-top:8px; font-size:14px; font-weight:600; }
   .acts { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
   .act { flex-direction:column; gap:3px; padding:11px 2px; min-height:66px; font-size:12.5px; background:var(--card); box-shadow:var(--shadow); border-radius:16px; color:var(--ink); }
   .act .ic { font-size:22px; line-height:1; }
@@ -153,7 +161,7 @@
   .photos .ph { position:relative; aspect-ratio:1; background:var(--field); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); text-align:center; }
   .photos img { width:100%; height:100%; object-fit:cover; border-radius:12px; cursor:pointer; }
   .photos .x { position:absolute; top:5px; right:5px; background:rgba(0,0,0,.6); color:#fff; border-radius:50%; width:28px; height:28px; padding:0; min-height:0; font-size:14px; }
-  .photos .star { position:absolute; top:5px; left:5px; background:rgba(0,0,0,.6); color:#fff; border-radius:50%; width:28px; height:28px; padding:0; min-height:0; font-size:14px; }
+  .photos .star { display:flex; align-items:center; justify-content:center; position:absolute; top:5px; left:5px; background:rgba(0,0,0,.6); color:#fff; border-radius:50%; width:28px; height:28px; padding:0; min-height:0; font-size:14px; }
   .photos .cloud { position:absolute; bottom:5px; left:5px; background:rgba(0,0,0,.6); color:#fff; border-radius:8px; font-size:11px; padding:1px 6px; }
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.88); display:flex; align-items:center; justify-content:center; z-index:70; }
   .modal img { max-width:96vw; max-height:92vh; }
@@ -656,13 +664,14 @@ function viewJobs(app) {
 }
 
 /* ---------- Job page: the profile ---------- */
-const JOBTABS = [["details", "📋", "Details"], ["days", "📆", "Days"], ["photos", "📷", "Photos"], ["paints", "🎨", "Paints"], ["notes", "📝", "Notes"], ["pay", "💵", "Pay"]];
+const JOBTABS = [["details", "📋", "Details"], ["days", "📆", "Days"], ["photos", "📷", "Photos"], ["paints", "🎨", "Paints"], ["notes", "📝", "Notes"], ["pay", "💵", "Pay"]]; // shown as six big buttons, all visible at once
 function viewJob(app) {
   const s = jobById(openJob);
   if (!s) { openJob = null; return render(); }
   const st = stats(s), act = activeEntry(), ps = payStatus(s), badge = { paints: paintsOf(s).length, photos: photosOf(s).length, notes: notesOf(s).length + contactsOf(s).length, days: st.days };
   const statChip = st.active ? `<span class="chip live">● In progress</span>` : s.done ? `<span class="chip done">✓ Finished</span>` : `<span class="chip open">Open</span>`;
-  const hasPhone = !!digits(s.ownerPhone);
+  const hasPhone = !!digits(s.ownerPhone), pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const sum = { details: ownerName(s) || (s.ownerPhone ? "Contact saved" : "Add owner"), days: pl(st.days, "day"), photos: pl(photosOf(s).length, "photo"), paints: pl(paintsOf(s).length, "paint"), notes: pl(notesOf(s).length + contactsOf(s).length, "note"), pay: ps === "nopay" ? "Set the pay" : owedOf(s) > 0 ? money(owedOf(s)) + " due" : "Paid ✓" };
   app.innerHTML = `
     <button class="small" id="back">← All jobs</button>
     <div class="banner" style="margin-top:10px;--h:${hue(s.address)}" data-thumb="${s.id}"><div class="b-ph">🏠<small>Add a photo of the house</small></div><div class="shade"></div>
@@ -676,7 +685,7 @@ function viewJob(app) {
       <button class="act ${s.done ? "" : "good"}" id="j-done"><span class="ic">${s.done ? "↺" : "✓"}</span>${s.done ? "Reopen" : "Finish"}</button>
     </div>
     <div class="tiles"><div class="tile"><div class="k">Started</div><div class="v">${st.days ? fmtShort(st.first) : "–"}</div></div><div class="tile"><div class="k">${s.done ? "Finished" : st.active ? "Status" : "Last day"}</div><div class="v">${s.done ? fmtShort(doneDate(s)) : st.active ? "Working" : st.days ? fmtShort(st.last) : "–"}</div></div><div class="tile"><div class="k">Took</div><div class="v" style="font-size:17px">${st.days} day${st.days === 1 ? "" : "s"}<div class="muted" style="font-weight:600">${fmtHrs(st.hours)}</div></div></div></div>
-    <div class="seg">${JOBTABS.map(([k, ic, l]) => `<button data-jt="${k}" class="${jobTab === k ? "on" : ""}">${ic} ${l}${badge[k] ? `<span class="n">${badge[k]}</span>` : ""}</button>`).join("")}</div>
+    <div class="sections">${JOBTABS.map(([k, ic, l]) => `<button data-jt="${k}" class="sec ${jobTab === k ? "on" : ""}"><span class="si">${ic}</span><span class="sl">${l}</span><span class="sn">${esc(sum[k])}</span></button>`).join("")}</div>
     <div id="jt"></div>`;
   $("#back").onclick = () => { openJob = null; render(); };
   app.querySelectorAll("[data-jt]").forEach(b => b.onclick = () => { jobTab = b.dataset.jt; render(); });
@@ -684,7 +693,7 @@ function viewJob(app) {
   if ($("#j-out")) $("#j-out").onclick = clockOut;
   if ($("#j-nophone")) $("#j-nophone").onclick = () => { jobTab = "details"; render(); toast("Add the owner's phone number here"); };
   $("#j-done").onclick = () => { s.done = s.done ? "" : todayStr(); touch(s); save(); toast(s.done ? "Job marked finished" : "Job reopened"); render(); };
-  $("#cover-in").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", deleted: false })); s.cover = id; touch(s); save(); toast("House photo saved"); render(); } catch { toast("That file isn't a photo"); } };
+  $("#cover-in").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: "before", caption: "", deleted: false })); s.cover = id; touch(s); save(); toast("House photo saved"); render(); } catch { toast("That file isn't a photo"); } };
   ({ details: tabDetails, days: tabDays, photos: tabPhotos, paints: tabPaints, notes: tabNotes, pay: tabPay })[jobTab]($("#jt"), s, st);
 }
 
@@ -746,32 +755,63 @@ function tabDays(box, s, st) {
   box.querySelectorAll("[data-entry]").forEach(c => c.onclick = () => { openEntry = c.dataset.entry; render(); });
 }
 
+let photoLabel = "during", photoFilter = "all";
+const PLABELS = [["before", "Before"], ["during", "During"], ["after", "After"], ["issue", "Issues"], ["other", "Other"]];
+const plabel = p => PLABELS.some(x => x[0] === p.label) ? p.label : "during";
 function tabPhotos(box, s) {
-  box.innerHTML = `<div class="card"><div class="row"><h3 style="margin:0">📷 Photos</h3><label style="margin:0"><span class="btn primary small">＋ Add photos</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label></div>
-    <div class="muted" style="margin-top:6px">Tap ★ on a photo to make it the job's cover picture. Paint bucket photos go in the 🎨 Paints tab.</div>
-    <div class="photos" id="photos"></div>${photosOf(s).length ? "" : `<div class="empty"><span class="big-emoji">🖼</span>No photos yet.</div>`}</div>`;
-  $("#ph-in").onchange = async e => {
-    let n = 0;
+  const ps = photosOf(s), n = k => ps.filter(p => plabel(p) === k).length;
+  if (photoFilter !== "all" && !n(photoFilter)) photoFilter = "all";
+  box.innerHTML = `
+    <div class="card"><h3>📷 Add photos</h3><div class="muted">Pick what they show first. They're filed under it automatically.</div>
+      <div class="pills" style="margin-top:10px">${PLABELS.slice(0, 4).map(([k, l]) => `<button data-pl="${k}" class="${photoLabel === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="actions"><label style="margin:0;flex:1"><span class="btn primary block">📷 Take photo</span><input id="ph-cam" type="file" accept="image/*" capture="environment" style="display:none"></label><label style="margin:0;flex:1"><span class="btn block">🖼 Choose</span><input id="ph-in" type="file" accept="image/*" multiple style="display:none"></label></div></div>
+    ${ps.length ? `<div class="filters"><button data-pf="all" class="${photoFilter === "all" ? "on" : ""}">All ${ps.length}</button>${PLABELS.filter(([k]) => n(k)).map(([k, l]) => `<button data-pf="${k}" class="${photoFilter === k ? "on" : ""}">${l} ${n(k)}</button>`).join("")}</div>` : `<div class="empty"><span class="big-emoji">🖼</span>No photos yet.</div>`}
+    <div id="photo-groups"></div>
+    <div class="muted" style="margin:8px 4px">Photos of paint buckets and labels live in the 🎨 Paints section.</div>`;
+  box.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { photoLabel = b.dataset.pl; box.querySelectorAll("[data-pl]").forEach(x => x.classList.toggle("on", x === b)); });
+  box.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { photoFilter = b.dataset.pf; render(); });
+  const add = async e => {
+    let k = 0;
     for (const f of e.target.files) {
-      try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", deleted: false })); n++; }
+      try { const blob = await resizeImage(f), id = uid(); await blobPut(id, blob); state.photos.push(touch({ id, siteId: s.id, taken: todayStr(), driveId: "", label: photoLabel, caption: "", deleted: false })); k++; }
       catch { toast("Skipped a file that isn't a photo"); }
     }
-    if (n) { save(); toast(`${n} photo${n > 1 ? "s" : ""} added`); } render();
+    if (k) { save(); toast(`${k} photo${k > 1 ? "s" : ""} added to ${PLABELS.find(x => x[0] === photoLabel)[1]}`); } render();
   };
+  $("#ph-cam").onchange = add; $("#ph-in").onchange = add;
   drawPhotos(s);
 }
 async function drawPhotos(s) {
-  const box = $("#photos"); if (!box) return;
-  const cover = coverPhoto(s);
-  for (const p of photosOf(s).sort((a, b) => (b.taken || "").localeCompare(a.taken || ""))) {
-    const d = document.createElement("div"); d.className = "ph"; box.append(d);
-    const url = await photoUrl(p);
-    if (!url) { d.textContent = p.driveId ? "☁️ Tap Sync to load" : "Missing"; continue; }
-    d.innerHTML = `<img src="${url}" alt="Job photo"><button class="star" aria-label="Make cover">${cover && cover.id === p.id ? "★" : "☆"}</button><button class="x" aria-label="Remove photo">✕</button><span class="cloud">${p.driveId ? "☁️ " : ""}${fmtShort(p.taken)}</span>`;
-    d.querySelector("img").onclick = () => { const m = document.createElement("div"); m.className = "modal"; m.innerHTML = `<img src="${url}" alt="">`; m.onclick = () => m.remove(); document.body.append(m); };
-    d.querySelector(".star").onclick = () => { s.cover = p.id; touch(s); save(); toast("Cover photo set"); render(); };
-    d.querySelector(".x").onclick = () => { if (!confirm("Remove this photo? (A copy already in Google Drive stays there.)")) return; touch(Object.assign(p, { deleted: true })); if (s.cover === p.id) { s.cover = ""; touch(s); } save(); render(); };
+  const root = $("#photo-groups"); if (!root) return;
+  const ps = photosOf(s), cover = coverPhoto(s);
+  for (const [k, l] of PLABELS) {
+    if (photoFilter !== "all" && photoFilter !== k) continue;
+    const list = ps.filter(p => plabel(p) === k).sort((a, b) => (a.taken || "").localeCompare(b.taken || "") || a.id.localeCompare(b.id)); if (!list.length) continue;
+    const sec = document.createElement("div"); sec.innerHTML = `<h2>${l} · ${list.length}</h2><div class="photos" style="margin-top:0"></div>`; root.append(sec);
+    const grid = sec.querySelector(".photos");
+    for (const p of list) {
+      const d = document.createElement("div"); d.className = "ph"; grid.append(d);
+      const url = await photoUrl(p);
+      if (!url) { d.textContent = p.driveId ? "☁️ Tap Sync to load" : "Missing"; continue; }
+      d.innerHTML = `<img src="${url}" alt="Job photo"><span class="cloud">${p.driveId ? "☁️ " : ""}${fmtShort(p.taken)}</span>${cover && cover.id === p.id ? `<span class="star">★</span>` : ""}${p.caption ? `<span class="cloud" style="top:5px;bottom:auto;right:5px;left:auto">💬</span>` : ""}`;
+      d.onclick = () => openPhotoViewer(p, s, url);
+    }
   }
+}
+function openPhotoViewer(p, s, url) {
+  const bg = document.createElement("div"); bg.className = "sheet-bg";
+  bg.innerHTML = `<div class="sheet"><img id="pv-img" src="${url}" alt="" style="width:100%;max-height:46vh;object-fit:contain;background:#000;border-radius:14px">
+    <div class="muted" style="margin:8px 2px">${fmtDay(p.taken)} · tap the photo for full screen</div>
+    <div class="pills">${PLABELS.slice(0, 4).map(([k, l]) => `<button data-l="${k}" class="${plabel(p) === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <input id="pv-cap" placeholder="Caption (optional), e.g. cracked stucco by the garage" value="${esc(p.caption)}" style="margin-top:10px">
+    <div class="actions"><button class="primary" id="pv-done">Done</button><button class="soft" id="pv-cover">★ Make cover</button><button class="danger" id="pv-del">Delete</button></div></div>`;
+  document.body.append(bg);
+  bg.querySelectorAll("[data-l]").forEach(b => b.onclick = () => { p.label = b.dataset.l; touch(p); bg.querySelectorAll("[data-l]").forEach(x => x.classList.toggle("on", x === b)); });
+  $("#pv-img").onclick = () => { const m = document.createElement("div"); m.className = "modal"; m.innerHTML = `<img src="${url}" alt="">`; m.onclick = () => m.remove(); document.body.append(m); };
+  const close = () => { p.caption = $("#pv-cap").value.trim(); touch(p); save(); bg.remove(); render(); };
+  $("#pv-done").onclick = close; bg.onclick = e => { if (e.target === bg) close(); };
+  $("#pv-cover").onclick = () => { s.cover = p.id; touch(s); close(); toast("Cover photo set"); };
+  $("#pv-del").onclick = () => { if (!confirm("Delete this photo? (A copy already in Google Drive stays there.)")) return; touch(Object.assign(p, { deleted: true })); if (s.cover === p.id) { s.cover = ""; touch(s); } save(); bg.remove(); render(); };
 }
 
 function tabNotes(box, s) {
@@ -820,6 +860,107 @@ function tabPay(box, s, st) {
   if ($("#j-unpay")) $("#j-unpay").onclick = () => setPaid("");
 }
 
+/* ---------- reading a paint label (the sticker the store prints) ---------- */
+const BRAND_RES = [[/SHERWIN|WILLIAMS|\bSW\s?[-]?\s?\d{4}\b/, "Sherwin-Williams"], [/BEHR/, "Behr"], [/KELLY[\s-]*MOORE/, "Kelly-Moore"], [/BENJAMIN|\bMOORE\b/, "Benjamin Moore"], [/DUNN[\s-]*EDWARDS/, "Dunn-Edwards"], [/VALSPAR/, "Valspar"], [/\bPPG\b/, "PPG"], [/GLIDDEN/, "Glidden"], [/FRAZEE/, "Frazee"], [/\bVISTA\b/, "Vista"]];
+const PRODUCT_RES = [["Duration", /DURATION/], ["SuperPaint", /SUPER[\s-]*PAINT/], ["ProClassic", /PRO[\s-]*CLASSIC/], ["ProMar 200", /PRO[\s-]*MAR\s*200/], ["ProMar 400", /PRO[\s-]*MAR\s*400/], ["ProMar", /PRO[\s-]*MAR\b/], ["Emerald", /EMERALD/], ["Resilience", /RESILIENCE/], ["Cashmere", /CASHMERE/], ["Harmony", /HARMONY/], ["Captivate", /CAPTIVATE/], ["Eminence", /EMINENCE/], ["A-100", /\bA[\s-]?100\b/], ["Loxon", /LOXON/], ["SuperDeck", /SUPER[\s-]*DECK/], ["Regal Select", /REGAL/], ["Aura", /\bAURA\b/], ["Marquee", /MARQUEE/], ["Primer", /PRIMER|PREP[\s-]*RITE|PRO[\s-]*BLOCK/]];
+const titleCase = s => s.toLowerCase().replace(/(^|[\s\-\/&])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+function parseLabel(raw) {
+  const text = String(raw || "").replace(/[|\\_~`]+/g, " ").replace(/[ \t]+/g, " "), up = text.toUpperCase();
+  // letters that OCR reads as digits (PR0CLASSIC, SHERW1N) are repaired before matching words
+  let upL = up; for (let i = 0; i < 2; i++) upL = upL.replace(/([A-Z])([01])/g, (m, a, d) => a + (d === "0" ? "O" : "I")).replace(/([01])([A-Z])/g, (m, d, a) => (d === "0" ? "O" : "I") + a);
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean), out = {};
+  const fixDigits = s => s.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1").replace(/S/g, "5");
+  for (const [re, name] of BRAND_RES) if (re.test(upL)) { out.brand = name; break; }
+  let codeRe = null;
+  // Sherwin-Williams: SW 7008 (the O/I/S look-alikes that OCR confuses with digits are repaired)
+  let m = up.match(/\bSW\s*[-–.:]?\s*([0-9OIL|S]{4})\b/);
+  if (m && (m[1].match(/\d/g) || []).length >= 2 && /^\d{4}$/.test(fixDigits(m[1]))) { out.colorCode = "SW " + fixDigits(m[1]); codeRe = new RegExp("SW\\s*[-–.:]?\\s*" + m[1].replace(/[|]/g, "\\|") + "\\b", "i"); if (!out.brand) out.brand = "Sherwin-Williams"; }
+  if (!out.colorCode && (m = up.match(/\b(HC|OC|CC|AF|CSP)\s*[-–]\s*(\d{1,3})\b/))) { out.colorCode = `${m[1]}-${m[2]}`; codeRe = new RegExp(m[0].replace(/[-–\s]+/g, "\\s*[-–]?\\s*"), "i"); out.brand ||= "Benjamin Moore"; }
+  if (!out.colorCode && (m = up.match(/\b([A-Z]{1,4}\d{2,3}-\d{1,2}[A-Z]?)\b/)) && !/^(20\d\d)/.test(m[1])) { out.colorCode = m[1]; codeRe = new RegExp(m[1], "i"); }
+  if (!out.colorCode && (out.brand === "Benjamin Moore") && (m = up.match(/\b(\d{4})\s*[-–]\s*(\d{2})\b(?!\s*[-–]\s*\d)/))) { out.colorCode = `${m[1]}-${m[2]}`; codeRe = new RegExp(m[1] + "\\s*[-–]\\s*" + m[2]); }
+  if (!out.colorCode && (m = up.match(/COLOU?R\s*(?:NO\.?|NUMBER|#|CODE)\s*[:#.\-]?\s*([A-Z0-9][A-Z0-9 \-]{2,13})/))) out.colorCode = m[1].trim();
+  // color name: the words next to the code, or after "COLOR NAME"
+  const clean = s => titleCase(s.replace(/[^A-Za-z' &\-]/g, " ").replace(/\b(COLOU?R|NAME|NO|NUMBER)\b/gi, " ").replace(/\s+/g, " ").replace(/^[\s\-&']+|[\s\-&']+$/g, "").trim());
+  const bad = /SHERWIN|WILLIAMS|PAINT|LATEX|ACRYL|INTERIOR|EXTERIOR|SATIN|GLOSS|FLAT|MATTE|EGGSHELL|LUSTR|BASE|GALLON|STORE|DATE|FORMULA|PRIMER|DURATION|EMERALD|CASHMERE/i;
+  if ((m = text.match(/COLOU?R\s*NAME\s*[:\-]?\s*([A-Za-z][A-Za-z' &\-]{2,40})/i))) out.colorName = clean(m[1]);
+  if (!out.colorName && codeRe) {
+    const i = lines.findIndex(l => codeRe.test(l));
+    if (i >= 0) {
+      const same = clean(lines[i].replace(codeRe, " "));
+      if (same.length >= 3 && !bad.test(same)) out.colorName = same;
+      else if (lines[i + 1] && /^[A-Za-z][A-Za-z' &\-]{2,34}$/.test(lines[i + 1]) && !bad.test(lines[i + 1])) out.colorName = clean(lines[i + 1]);
+    }
+  }
+  if (out.colorName) { out.colorName = out.colorName.split(" ").slice(0, 5).join(" "); if (out.colorName.length < 3) delete out.colorName; }
+  // sheen
+  for (const [re, name] of [[/SEMI[\s-]*GLOSS/, "Semi-gloss"], [/HIGH[\s-]*GLOSS|\bGLOSS\b/, "Gloss"], [/\bSATIN\b/, "Satin"], [/EGG[\s-]*SHELL|LOW[\s-]*LUSTRE?|LOW[\s-]*LUSTER/, "Eggshell"], [/\bMATTE?\b/, "Matte"], [/ULTRA[\s-]*FLAT|\bFLAT\b/, "Flat"]]) if (re.test(upL)) { out.sheen = name; break; }
+  // product line
+  for (const [name, re] of PRODUCT_RES) if (re.test(upL)) { out.product = name; break; }
+  if (!out.product && out.brand === "Behr" && /\bULTRA\b/.test(up) && !/ULTRA[\s-]*FLAT/.test(up)) out.product = "Ultra";
+  // size
+  if ((m = up.match(/\b(\d+(?:\.\d+)?)\s*(?:GAL(?:LONS?)?)\b/))) out.size = `${m[1]} gal`;
+  else if (/\bGALLON\b/.test(up)) out.size = "1 gal";
+  else if (/\b(\d+)\s*(?:QT|QUARTS?)\b/.test(up)) out.size = `${up.match(/\b(\d+)\s*(?:QT|QUARTS?)\b/)[1]} qt`;
+  else if (/\bQUART\b|\bQT\b/.test(up)) out.size = "1 qt";
+  else if (/\b(\d+)\s*(?:PT|PINTS?)\b/.test(up)) out.size = `${up.match(/\b(\d+)\s*(?:PT|PINTS?)\b/)[1]} pt`;
+  // notes: interior/exterior and the base
+  const bits = [];
+  if (/\bINT(?:ERIOR)?\b/.test(upL)) bits.push("Interior"); else if (/\bEXT(?:ERIOR)?\b/.test(upL)) bits.push("Exterior");
+  if ((m = text.match(/\bBASE\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9 \-\/]{1,24})/i))) bits.push("Base: " + titleCase(m[1].trim().split(/\s{2,}|\n/)[0]));
+  if (bits.length) out.notes = bits.join(" · ");
+  return out;
+}
+
+
+/* ---------- the text reader: loaded only when you read a label (needs internet the first time; the photo never leaves your phone) ---------- */
+let tessPromise = null;
+function loadTesseract() {
+  return tessPromise ||= new Promise((res, rej) => { if (window.Tesseract) return res(); const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload = res; sc.onerror = () => { tessPromise = null; rej(new Error("offline")); }; document.head.append(sc); });
+}
+async function prepForOcr(blob) { // bigger, grey, and contrast-stretched: makes small printed text much easier to read
+  const bmp = await createImageBitmap(blob), k = Math.min(2, 2200 / Math.max(bmp.width, bmp.height)), w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+  const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.drawImage(bmp, 0, 0, w, h);
+  const im = x.getImageData(0, 0, w, h), d = im.data, hist = new Uint32Array(256);
+  for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = d[i + 1] = d[i + 2] = g; hist[g]++; }
+  let lo = 0, hi = 255, acc = 0; const tot = w * h;
+  while (lo < 255 && (acc += hist[lo]) < tot * 0.02) lo++; acc = 0; while (hi > 0 && (acc += hist[hi]) < tot * 0.02) hi--;
+  const sc = 255 / Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, (d[i] - lo) * sc)); d[i] = d[i + 1] = d[i + 2] = v; }
+  x.putImageData(im, 0, 0); return new Promise(r => c.toBlob(r, "image/png"));
+}
+async function readLabelText(blob, onProgress) {
+  await loadTesseract();
+  const worker = await Tesseract.createWorker("eng", 1, { workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js", corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0", langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int", logger: onProgress });
+  try { const { data } = await worker.recognize(await prepForOcr(blob)); return data.text; } finally { await worker.terminate(); }
+}
+const OCR_FIELDS = { brand: "#pf-brand", product: "#pf-product", colorCode: "#pf-code", colorName: "#pf-cname", sheen: "#pf-sheen", size: "#pf-size", notes: "#pf-notes" };
+let ocrBusy = false, ocrNote = "", paintHooks = null, ocrFilled = [];
+async function runOcr(p, manual) {
+  if (ocrBusy) return;
+  const ph = state.photos.find(x => x.id === p.photoTop && live(x)); if (!ph) return toast("Take a photo of the label first");
+  const status = m => { const el = $("#ocr-status"); if (el) el.textContent = m; };
+  ocrBusy = true; ocrNote = ""; status("Getting ready to read the label…"); { const b = $("#ocr-btn"); if (b) b.disabled = true; }
+  try {
+    const blob = await (await fetch(await photoUrl(ph))).blob();
+    const text = await readLabelText(blob, m => { if (m.status === "recognizing text") status(`Reading the label… ${Math.round(m.progress * 100)}%`); else status("Loading the label reader (first time only)…"); });
+    const parsed = parseLabel(text), found = Object.keys(parsed);
+    p.labelText = text; touch(p);
+    if (!found.length) ocrNote = "Couldn't find paint details on that photo. Try a closer, flatter photo of the sticker so it fills the picture, or type them in.";
+    else {
+      const cur = k => { const el = $(OCR_FIELDS[k]); return (el ? el.value : String(p[k] || "")).trim(); };
+      const conflict = manual && found.some(k => k !== "notes" && cur(k) && cur(k) !== parsed[k]);
+      const overwrite = manual && (!conflict || confirm("Replace the details you typed with what the label says?"));
+      let n = 0; ocrFilled = [];
+      for (const k of found) { if (cur(k) && !overwrite) continue; if (cur(k) === parsed[k]) continue; const el = $(OCR_FIELDS[k]); if (el) { el.value = parsed[k]; el.classList.add("filled"); el.addEventListener("input", () => el.classList.remove("filled"), { once: true }); } p[k] = parsed[k]; ocrFilled.push(k); n++; }
+      paintHooks?.readForm?.(); touch(p);
+      ocrNote = n ? `✓ Filled in ${n} detail${n === 1 ? "" : "s"} from the label (green). Please double-check them.` : "Everything the label said is already filled in.";
+      if (n) toast("Filled in from the label — please double-check");
+    }
+    save();
+  } catch (e) { ocrNote = e.message === "offline" ? "Couldn't load the label reader. It needs internet the first time. You can type the details instead." : "Couldn't read that photo. You can type the details instead."; }
+  finally { ocrBusy = false; if (openPaint === p.id && tab === "jobs") { paintHooks?.readForm?.(); render(); } }
+}
+
 /* ---------- Paints: a ledger of what paint was used where ---------- */
 const SURFACES = ["Walls", "Ceiling", "Trim", "Doors", "Cabinets", "Exterior walls", "Fascia / eaves", "Garage", "Deck / fence"];
 const ROOMS = ["Master bedroom", "Bedroom", "Living room", "Kitchen", "Bathroom", "Laundry room", "Hallway", "Entry", "Dining room", "Office"];
@@ -849,15 +990,17 @@ function viewPaint(app) {
   if (!p || !s) { openPaint = null; return render(); }
   let areas = areasOf(p);
   const uniq = k => [...new Set([...state.paints.filter(live).map(x => x[k]).filter(Boolean)])];
-  const slot = (key, label) => { const pid = p[key]; return `<div><div class="muted" style="font-weight:700;margin-bottom:6px">${label}</div>
+  const slot = (key, label, extra = "") => { const pid = p[key]; return `<div><div class="muted" style="font-weight:700;margin-bottom:6px">${label}</div>
     <div class="pslot" data-slot="${key}" data-pphoto="${pid}" style="--h:${hue(key)}"><span>📷</span></div>
     <div class="row" style="gap:6px;margin-top:6px"><label class="btn soft small grow">📷 Take<input type="file" accept="image/*" capture="environment" data-file="${key}" style="display:none"></label><label class="btn small grow">🖼 Choose<input type="file" accept="image/*" data-file="${key}" style="display:none"></label></div>
-    ${pid ? `<button class="small danger block" data-rm="${key}" style="margin-top:6px">Remove photo</button>` : ""}</div>`; };
+    ${pid ? `<button class="small danger block" data-rm="${key}" style="margin-top:6px">Remove photo</button>` : ""}${extra}</div>`; };
   app.innerHTML = `
     <button class="small" id="back">← Paints · ${esc(streetOf(s.address))}</button>
     <div class="card" style="margin-top:10px"><h3>📷 Photos of the bucket</h3>
-      <div class="two">${slot("photoFront", "Front of bucket")}${slot("photoTop", "Top of lid (code)")}</div>
-      <div class="muted" style="margin-top:8px">Tap a photo to enlarge it, then type what the lid says below.</div></div>
+      <div class="two">${slot("photoFront", "Front of bucket")}${slot("photoTop", "Color label (sticker)")}</div>
+      ${p.photoTop ? `<button class="primary block" id="ocr-btn" style="margin-top:12px">✨ Read the label and fill in the details</button>` : `<div class="muted" style="margin-top:10px">Take a photo of the store's <b>color label sticker</b> (the printed receipt on the lid). Hold the phone straight above it so the sticker fills the picture. The app will read it for you.</div>`}
+      <div id="ocr-status" class="ocrnote">${esc(ocrNote)}</div>
+      ${p.labelText ? `<details style="margin-top:6px"><summary>What the app read from the label</summary><pre class="rawtext">${esc(p.labelText)}</pre></details>` : ""}</div>
     <div class="card"><h3>🎨 Paint details</h3>
       <div class="two"><div><label style="margin-top:0">Brand</label><input id="pf-brand" list="dl-brand" value="${esc(p.brand)}" autocapitalize="words" autocomplete="off"></div><div><label style="margin-top:0">Product</label><input id="pf-product" list="dl-product" value="${esc(p.product)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Duration"></div></div>
       <div class="two"><div><label>Color code</label><input id="pf-code" value="${esc(p.colorCode)}" autocapitalize="characters" autocomplete="off" placeholder="e.g. SW 7008"></div><div><label>Color name</label><input id="pf-cname" value="${esc(p.colorName)}" autocapitalize="words" autocomplete="off" placeholder="e.g. Alabaster"></div></div>
@@ -866,9 +1009,12 @@ function viewPaint(app) {
     <div class="card"><h3>📍 Used for</h3><div class="muted">Tap to choose, or type your own.</div><div id="pf-areas"></div></div>
     <div class="card"><h3>📝 Notes (optional)</h3><textarea id="pf-notes" style="min-height:70px" placeholder="Tinted at the store, thinned, 2 coats…">${esc(p.notes)}</textarea>
       <div class="actions"><button class="primary" id="pf-save">Save paint</button><button class="danger" id="pf-del">Delete paint</button></div></div>`;
+  ocrNote = "";
   const readForm = () => { Object.assign(p, { brand: $("#pf-brand").value.trim(), product: $("#pf-product").value.trim(), colorCode: $("#pf-code").value.trim(), colorName: $("#pf-cname").value.trim(), sheen: $("#pf-sheen").value, size: $("#pf-size").value.trim(), notes: $("#pf-notes").value, areas: areas.join(" | ") }); touch(p); };
+  paintHooks = { readForm };
+  for (const k of ocrFilled) { const el = $(OCR_FIELDS[k]); if (el) { el.classList.add("filled"); el.addEventListener("input", () => el.classList.remove("filled"), { once: true }); } } // fields the label reader filled stay green until you change them
   const isEmpty = () => !(p.brand || p.product || p.colorCode || p.colorName || p.sheen || p.size || p.notes || p.areas || p.photoFront || p.photoTop);
-  const close = () => { readForm(); if (isEmpty()) p.deleted = true; save(); openPaint = null; jobTab = "paints"; render(); };
+  const close = () => { readForm(); if (isEmpty()) p.deleted = true; save(); openPaint = null; jobTab = "paints"; paintHooks = null; ocrFilled = []; render(); };
   const drawAreas = () => {
     const recent = uniq("areas").flatMap(x => x.split("|").map(y => y.trim())).filter(Boolean), sug = [...new Set([...recent, ...SURFACES, ...ROOMS])].filter(a => !areas.includes(a));
     $("#pf-areas").innerHTML = `<div class="crewchips" style="margin-top:10px">${areas.map(a => `<button class="on" data-ar="${esc(a)}">${esc(a)} ✕</button>`).join("") || `<span class="muted">Nothing chosen yet</span>`}</div>
@@ -881,17 +1027,19 @@ function viewPaint(app) {
   };
   drawAreas();
   $("#back").onclick = close;
+  if ($("#ocr-btn")) $("#ocr-btn").onclick = () => runOcr(p, true);
   $("#pf-save").onclick = () => { readForm(); save(); toast("Paint saved"); close(); };
-  $("#pf-del").onclick = () => { if (!confirm("Delete this paint?")) return; for (const k of ["photoFront", "photoTop"]) { const ph = state.photos.find(x => x.id === p[k]); if (ph) touch(Object.assign(ph, { deleted: true })); } touch(Object.assign(p, { deleted: true })); save(); openPaint = null; jobTab = "paints"; render(); };
+  $("#pf-del").onclick = () => { if (!confirm("Delete this paint?")) return; for (const k of ["photoFront", "photoTop"]) { const ph = state.photos.find(x => x.id === p[k]); if (ph) touch(Object.assign(ph, { deleted: true })); } touch(Object.assign(p, { deleted: true })); save(); openPaint = null; jobTab = "paints"; paintHooks = null; render(); };
   app.querySelectorAll("[data-file]").forEach(inp => inp.onchange = async e => {
     const f = e.target.files[0], key = inp.dataset.file; if (!f) return; readForm();
     try {
-      const blob = await resizeImage(f), id = uid(); await blobPut(id, blob);
+      const blob = await resizeImage(f, key === "photoTop" ? 2400 : 1600), id = uid(); await blobPut(id, blob);
       const old = state.photos.find(x => x.id === p[key]); if (old) touch(Object.assign(old, { deleted: true }));
-      state.photos.push(touch({ id, siteId: p.siteId, taken: todayStr(), driveId: "", kind: "paint", deleted: false })); p[key] = id; touch(p); save(); render();
+      state.photos.push(touch({ id, siteId: p.siteId, taken: todayStr(), driveId: "", kind: "paint", deleted: false })); p[key] = id; if (key === "photoTop") p.labelText = ""; touch(p); save(); render();
+      if (key === "photoTop") runOcr(p, false); // reads the label automatically; only fills boxes that are still empty
     } catch { toast("That file isn't a photo"); }
   });
-  app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { readForm(); const ph = state.photos.find(x => x.id === p[b.dataset.rm]); if (ph) touch(Object.assign(ph, { deleted: true })); p[b.dataset.rm] = ""; touch(p); save(); render(); });
+  app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { readForm(); const ph = state.photos.find(x => x.id === p[b.dataset.rm]); if (ph) touch(Object.assign(ph, { deleted: true })); p[b.dataset.rm] = ""; if (b.dataset.rm === "photoTop") p.labelText = ""; touch(p); save(); render(); });
   app.querySelectorAll("[data-slot]").forEach(el => el.onclick = () => { if (!el.dataset.url) return; const m = document.createElement("div"); m.className = "modal"; m.innerHTML = `<img src="${el.dataset.url}" alt="">`; m.onclick = () => m.remove(); document.body.append(m); });
 }
 
@@ -1033,8 +1181,8 @@ const SHEET_NAME = "Painter Job Tracker";
 const COLS = {
   Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "lat", "lng", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
-  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "updated", "deleted"],
-  Paints: ["id", "siteId", "address", "brand", "product", "colorCode", "colorName", "sheen", "size", "areas", "photoFront", "photoTop", "notes", "updated", "deleted"],
+  Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "updated", "deleted"],
+  Paints: ["id", "siteId", "address", "brand", "product", "colorCode", "colorName", "sheen", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
   Contacts: ["id", "siteId", "address", "name", "role", "phone", "updated", "deleted"],
   People: ["id", "name", "updated", "deleted"],
@@ -1081,12 +1229,14 @@ async function ensureTabs(id) { // sheets made by older versions are missing the
   const missing = Object.keys(COLS).filter(t => !have.includes(t));
   if (missing.length) await jsonPost(`https://sheets.googleapis.com/v4/spreadsheets/${id}:batchUpdate`, { requests: missing.map(title => ({ addSheet: { properties: { title } } })) });
 }
+const folderCache = {};
+async function cachedFolder(name, parent) { return folderCache[parent + "/" + name] ||= await ensureFolder(name, parent); }
 async function uploadPendingPhotos(root) {
   for (const p of state.photos.filter(x => !x.driveId && !x.deleted)) {
     const rec = await blobGet(p.id); if (!rec) continue;
     const job = jobById(p.siteId); if (!job) continue;
-    let folder = await ensureFolder(job.address.replace(/[\/\\]/g, "-").slice(0, 100), root);
-    if (p.kind === "paint") folder = await ensureFolder("Paints", folder);
+    let folder = await cachedFolder(job.address.replace(/[\/\\]/g, "-").slice(0, 100), root);
+    folder = await cachedFolder(p.kind === "paint" ? "Paints" : PLABELS.find(x => x[0] === plabel(p))[1], folder); // job folder > Before / During / After / Issues / Other / Paints
     const boundary = "b" + uid(), meta = JSON.stringify({ name: `${p.kind === "paint" ? "paint-" : ""}${p.taken || "photo"}-${p.id}.jpg`, parents: [folder] });
     const body = new Blob([`--${boundary}\r\nContent-Type: application/json\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`, rec.blob, `\r\n--${boundary}--`]);
     const out = await gfetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body });
@@ -1099,7 +1249,7 @@ function queueSync() { if (!state.settings.clientId || !tokenValid()) return; cl
 async function syncNow(quiet) {
   if (syncing) return;
   if (!state.settings.clientId) { tab = "settings"; render(); return toast("Add your Google Client ID to turn on sync", 4000); }
-  syncing = true; syncMsg = ""; syncLabel();
+  syncing = true; syncMsg = ""; syncLabel(); for (const k in folderCache) delete folderCache[k];
   try {
     if (!state.settings.sheetId) state.settings.sheetId = await findOrCreateSheet();
     let got;
