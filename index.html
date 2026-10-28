@@ -1057,7 +1057,6 @@ function tabPaints(box, s) {
   box.querySelectorAll("[data-paint]").forEach(c => c.onclick = () => { openPaint = c.dataset.paint; render(); window.scrollTo(0, 0); });
   $("#pt-notes").onclick = () => { s.paint = $("#j-paint").value; touch(s); save(); toast("Saved"); };
 }
-const reorderText = (p, s) => [`Paint to re-order — ${streetOf(s.address)}`, [paintName(p), p.sheen, p.type].filter(Boolean).join(" · "), paintColor(p) ? `Color: ${paintColor(p)}` : "", p.base ? `Base: ${p.base}` : "", [p.orderNo ? `Order #${p.orderNo}` : "", p.mixedDate ? `mixed ${p.mixedDate}` : "", p.store ? `store ${p.store}` : "", p.storePhone].filter(Boolean).join(" · "), p.productCode ? `Product code: ${p.productCode}` : "", p.formula ? `Formula:\n${p.formula}` : "", areasOf(p).length ? `Used for: ${areasOf(p).join(", ")}` : ""].filter(Boolean).join("\n");
 function viewPaint(app) {
   const p = state.paints.find(x => x.id === openPaint && live(x)), s = p && jobById(p.siteId);
   if (!p || !s) { openPaint = null; return render(); }
@@ -1087,7 +1086,7 @@ function viewPaint(app) {
       <label>Product code</label><input id="pf-pcode" value="${esc(p.productCode)}" autocapitalize="characters" autocomplete="off" placeholder="e.g. A06W00351">
       <label>Formula (optional)</label><textarea id="pf-formula" style="min-height:64px" placeholder="Only if you want it written down">${esc(p.formula)}</textarea>
       <label>Size (optional)</label><input id="pf-size" value="${esc(p.size)}" autocomplete="off" placeholder="e.g. 1 gal">
-      <div class="actions"><button class="primary" id="pf-share">📤 Send re-order info</button>${digits(p.storePhone) ? `<a class="btn soft" href="tel:${digits(p.storePhone)}">📞 Call the store</a>` : ""}</div></div>
+</div>
     <div class="card"><h3>📍 Used for</h3><div class="muted">Tap to choose, or type your own.</div><div id="pf-areas"></div></div>
     <div class="card"><h3>📝 Notes (optional)</h3><textarea id="pf-notes" style="min-height:70px" placeholder="Tinted at the store, thinned, 2 coats…">${esc(p.notes)}</textarea>
       <div class="actions"><button class="primary" id="pf-save">Save paint</button><button class="danger" id="pf-del">Delete paint</button></div></div>`;
@@ -1115,7 +1114,6 @@ function viewPaint(app) {
   drawAreas();
   $("#back").onclick = close;
   if ($("#ocr-btn")) $("#ocr-btn").onclick = () => runOcr(p, true);
-  $("#pf-share").onclick = async () => { readForm(); save(); const t = reorderText(p, s); if (navigator.share) { try { await navigator.share({ title: "Paint to re-order", text: t }); } catch {} } else { try { await navigator.clipboard.writeText(t); toast("Copied. Paste it into a message."); } catch { prompt("Copy this text:", t); } } };
   $("#pf-save").onclick = () => { readForm(); save(); toast("Paint saved"); close(); };
   $("#pf-del").onclick = () => { if (!confirm("Delete this paint?")) return; for (const k of ["photoFront", "photoTop"]) { const ph = state.photos.find(x => x.id === p[k]); if (ph) touch(Object.assign(ph, { deleted: true })); } touch(Object.assign(p, { deleted: true })); save(); leave(); render(); };
   app.querySelectorAll("[data-file]").forEach(inp => inp.onchange = async e => {
