@@ -969,19 +969,27 @@ function dayLines(s) {
 const spanShort = s => { const st = stats(s), a = dayOf(st.first), b = dayOf(st.last); return st.days ? (b !== a ? `${fmtShort(a)}–${fmtShort(b)}` : fmtShort(a)) : "no days yet"; };
 const jobHead = s => `${streetOf(s.address)} (${spanShort(s)})`;
 const byFirstDay = (a, b) => (dayOf(stats(a).first) || "9999").localeCompare(dayOf(stats(b).first) || "9999") || a.id.localeCompare(b.id);
-const thanks = () => ["Let me know if I need to change anything on my end.", myNameSig() ? "— " + myNameSig() : ""].filter(Boolean);
+const thanks = () => ["Let me know if this checks out or if I need to change anything on my end.", myNameSig() ? "— " + myNameSig() : ""].filter(Boolean);
 /* a job's footer: its total and the dated payments that went toward it */
 function jobFoot(s) {
   const pays = appliedOfJob(s).map(a => ({ d: paymentById(a.paymentId).date, amt: Number(a.amount) })).sort((x, y) => x.d.localeCompare(y.d)), early = Number(s.paidAmount) || 0;
   const got = [...(early ? [`${money(early)} earlier`] : []), ...pays.map(x => `${fmtShort(x.d)} ${money(x.amt)}`)];
-  return `  Job total: ${money(jobTotal(s))}${got.length ? " · received " + got.join(", ") : ""}${owedOf(s) <= 0 && jobTotal(s) > 0 ? " ✓ paid in full" : ""}`;
+  return `  Job total${s.done ? "" : " so far"}: ${money(jobTotal(s))}${got.length ? " · received " + got.join(", ") : ""}${owedOf(s) <= 0 && jobTotal(s) > 0 ? " ✓ paid in full" : ""}`;
 }
-const jobBlock = s => [`• ${jobHead(s)}`, ...dayLines(s), jobFoot(s), ""];
+const jobBlock = s => [`• ${jobHead(s)}${s.done ? "" : " — still in progress"}`, ...dayLines(s), jobFoot(s), ""];
 /* messages pick up from the last one: the previous payment, this payment, and what was building after each (no growing history) */
+/* what was still building right after a payment, worked out from the work done up to that date (for payments saved before this was recorded) */
+function buildingAfter(p) {
+  const order = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id)), upto = new Set(order.slice(0, order.findIndex(x => x.id === p.id) + 1).map(x => x.id));
+  let earned = 0, paid = 0;
+  for (const j of jobs()) { const es = entriesOf(j).filter(v => dayOf(v.start) <= p.date); earned += j.payMode === "flat" ? (es.length ? Number(j.pay) || 0 : 0) : es.reduce((t, v) => t + dayRate(v), 0); paid += Number(j.paidAmount) || 0; }
+  for (const a of state.applied) if (live(a) && upto.has(a.paymentId) && jobById(a.siteId)) paid += Number(a.amount);
+  return Math.max(0, r2(earned - paid));
+}
 function chainLines(cur) {
   const ps = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id)), i = cur ? ps.findIndex(p => p.id === cur.id) : ps.length, prev = i > 0 ? ps[i - 1] : null;
   if (!prev) return [];
-  const line = (p, tag) => `• ${fmtShort(p.date)}: ${money(p.amount)} received${p.after != null && p.after !== "" ? ` → ${money(p.after)} building` : ""}${tag || ""}`;
+  const line = (p, tag) => `• ${fmtShort(p.date)}: ${money(p.amount)} received → ${money(p.after != null && p.after !== "" ? p.after : buildingAfter(p))} building${tag || ""}`;
   return ["Picking up from my last message:", line(prev), ...(cur ? [line(cur, "  ← this one")] : []), ""];
 }
 function openJobs(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay); }
