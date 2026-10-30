@@ -969,22 +969,31 @@ const spanShort = s => { const st = stats(s), a = dayOf(st.first), b = dayOf(st.
 const jobHead = s => `${streetOf(s.address)} (${spanShort(s)})`;
 const byFirstDay = (a, b) => (dayOf(stats(a).first) || "9999").localeCompare(dayOf(stats(b).first) || "9999") || a.id.localeCompare(b.id);
 const thanks = () => ["Let me know if I need to change anything on my end.", myNameSig() ? "— " + myNameSig() : ""].filter(Boolean);
-const jobBlock = (s, foot) => [`• ${jobHead(s)}`, ...dayLines(s), `  ${foot}`, ""];
-function openLines(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay).flatMap(s => jobBlock(s, `Job total: ${money(jobTotal(s))}${paidOf(s) > 0 ? " · received " + money(paidOf(s)) : ""}`)); }
+/* a job's footer: its total and the dated payments that went toward it */
+function jobFoot(s) {
+  const pays = appliedOfJob(s).map(a => ({ d: paymentById(a.paymentId).date, amt: Number(a.amount) })).sort((x, y) => x.d.localeCompare(y.d)), early = Number(s.paidAmount) || 0;
+  const got = [...(early ? [`${money(early)} earlier`] : []), ...pays.map(x => `${fmtShort(x.d)} ${money(x.amt)}`)];
+  return `  Job total: ${money(jobTotal(s))}${got.length ? " · received " + got.join(", ") : ""}${owedOf(s) <= 0 && jobTotal(s) > 0 ? " ✓ paid in full" : ""}`;
+}
+const jobBlock = s => [`• ${jobHead(s)}`, ...dayLines(s), jobFoot(s), ""];
+/* every payment, oldest first, with the jobs it went to, so the messages can be followed like a timeline */
+function timelineLines(currentId) {
+  const ps = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
+  if (!ps.length) return [];
+  return ["Payments received so far:", ...ps.flatMap(p => { const ap = appliedOfPayment(p), un = unappliedOf(p); return [`• ${fmtDay(p.date)}: ${money(p.amount)}${p.from ? " from " + p.from : ""}${p.id === currentId ? "  ← this one" : ""}`, ...ap.map(a => `   → ${streetOf(jobById(a.siteId).address)} ${money(a.amount)}`), ...(un > 0 ? [`   → ${money(un)} not assigned to a job yet`] : [])]; }), ""];
+}
+function openJobs(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay); }
 function confirmText(p) {
-  const ap = appliedOfPayment(p), un = unappliedOf(p), rest = openLines(ap.map(a => a.siteId)), building = jobs().reduce((t, s) => t + owedOf(s), 0);
+  const ap = appliedOfPayment(p), ids = ap.map(a => a.siteId), covered = ap.map(a => jobById(a.siteId)).sort(byFirstDay), rest = openJobs(ids), building = jobs().reduce((t, s) => t + owedOf(s), 0);
   const when = p.date === todayStr() ? "today" : "on " + fmtDay(p.date);
-  return [`Hey ${bossFirst()},`, "", `Here's a breakdown for your records. I received ${money(p.amount)} ${when}${p.note ? " (" + p.note + ")" : ""}, thank you! It covers:`, "",
-    ...ap.flatMap(a => { const s = jobById(a.siteId); return jobBlock(s, `Job total: ${money(jobTotal(s))}${owedOf(s) > 0 ? ` · received ${money(paidOf(s))}` : " ✓ paid in full"}`); }),
-    ...(un > 0 ? [`• ${money(un)} not assigned to a job yet`, ""] : []),
-    ...(rest.length ? ["Other work logged so far:", "", ...rest] : []), building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return [`Hey ${bossFirst()},`, "", `Here's a breakdown for your records. I received ${money(p.amount)} ${when}${p.note ? " (" + p.note + ")" : ""}, thank you! It went to:`, "",
+    ...covered.flatMap(jobBlock), ...(rest.length ? ["Other work logged so far:", "", ...rest.flatMap(jobBlock)] : []),
+    ...timelineLines(p.id), building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function updateText() {
   const js = jobs().filter(s => stats(s).days).sort(byFirstDay), earned = js.reduce((t, s) => t + jobTotal(s), 0), paid = js.reduce((t, s) => t + paidOf(s), 0), building = js.reduce((t, s) => t + owedOf(s), 0);
   return [`Hey ${bossFirst()},`, "", "Here's a breakdown of all the jobs so far, so you have it for your records:", "",
-    ...js.flatMap(s => jobBlock(s, `Job total: ${money(jobTotal(s))}${owedOf(s) > 0 ? (paidOf(s) > 0 ? " · received " + money(paidOf(s)) : "") : " ✓ paid in full"}`)),
-    `Total of all jobs: ${money(earned)} · received ${money(paid)}`, `Amount currently building: ${money(building)}`,
-    ...(paymentsNewest().length ? ["", "Payments received:", ...paymentsNewest().slice(0, 6).reverse().map(p => `• ${fmtDay(p.date)}: ${money(p.amount)}`)] : []), "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    ...js.flatMap(jobBlock), `Total of all jobs: ${money(earned)} · received ${money(paid)}`, "", ...timelineLines(""), `Amount currently building: ${money(building)}`, "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 /* sheet with the message ready to send by text, email or any app */
 function openSendSheet(title, text, subject) {

@@ -69,3 +69,4 @@ On the **Pay** tab tap **💵 I got paid**. Type the amount, check the date and 
 - Any payment in the **Payments received** list has a 📤 button to send its confirmation later.
 - **📤 Send an update** on the Pay tab sends every job with earned, paid and owed, plus recent payments.
 - You can edit the message before sending, then choose **💬 Text**, **✉️ Email**, **📤 Other app** (WhatsApp etc.) or **📋 Copy**. Save his phone and email once in Settings (or in the send box) and they're remembered.
+- Every message includes a **"Payments received so far"** timeline (each payment's date, amount, and the jobs it went to, with ← this one on the current payment), and each job's total shows the dated payments that went toward it. So a second message can be read against the first.
