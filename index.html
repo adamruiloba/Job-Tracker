@@ -950,7 +950,6 @@ function tabNotes(box, s) {
 function addPayment(o, allocs) {
   const p = touch({ id: uid(), date: o.date || todayStr(), amount: r2(Number(o.amount)), from: (o.from || "").trim(), note: (o.note || "").trim(), deleted: false }); state.payments.push(p);
   for (const a of allocs) if (a.amt > 0) state.applied.push(touch({ id: uid(), paymentId: p.id, siteId: a.s.id, amount: r2(a.amt), deleted: false }));
-  p.after = r2(jobs().reduce((t, j) => t + owedOf(j), 0)); // what was still building right after this payment, so the next message can pick up from it
   return p;
 }
 function autoPlan(avail) {
@@ -974,31 +973,17 @@ const thanks = () => ["Let me know if this checks out or if I need to change any
 function jobFoot(s) {
   const pays = appliedOfJob(s).map(a => ({ d: paymentById(a.paymentId).date, amt: Number(a.amount) })).sort((x, y) => x.d.localeCompare(y.d)), early = Number(s.paidAmount) || 0;
   const got = [...(early ? [`${money(early)} earlier`] : []), ...pays.map(x => `${fmtShort(x.d)} ${money(x.amt)}`)];
-  return `  Job total${s.done ? "" : " so far"}: ${money(jobTotal(s))}${got.length ? " · received " + got.join(", ") : ""}${owedOf(s) <= 0 && jobTotal(s) > 0 ? " ✓ paid in full" : ""}`;
+  return `  Job total: ${money(jobTotal(s))}${got.length ? " · received " + got.join(", ") : ""}${owedOf(s) <= 0 && jobTotal(s) > 0 ? " ✓ paid in full" : ""}`;
 }
-const jobBlock = s => [`• ${jobHead(s)}${s.done ? "" : " — still in progress"}`, ...dayLines(s), jobFoot(s), ""];
+const jobBlock = s => [`• ${jobHead(s)}`, ...dayLines(s), jobFoot(s), ""];
 /* messages pick up from the last one: the previous payment, this payment, and what was building after each (no growing history) */
-/* what was still building right after a payment, worked out from the work done up to that date (for payments saved before this was recorded) */
-function buildingAfter(p) {
-  const order = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id)), upto = new Set(order.slice(0, order.findIndex(x => x.id === p.id) + 1).map(x => x.id));
-  let earned = 0, paid = 0;
-  for (const j of jobs()) { const es = entriesOf(j).filter(v => dayOf(v.start) <= p.date); earned += j.payMode === "flat" ? (es.length ? Number(j.pay) || 0 : 0) : es.reduce((t, v) => t + dayRate(v), 0); paid += Number(j.paidAmount) || 0; }
-  for (const a of state.applied) if (live(a) && upto.has(a.paymentId) && jobById(a.siteId)) paid += Number(a.amount);
-  return Math.max(0, r2(earned - paid));
-}
-function chainLines(cur) {
-  const ps = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id)), i = cur ? ps.findIndex(p => p.id === cur.id) : ps.length, prev = i > 0 ? ps[i - 1] : null;
-  if (!prev) return [];
-  const line = (p, tag) => `• ${fmtShort(p.date)}: ${money(p.amount)} received → ${money(p.after != null && p.after !== "" ? p.after : buildingAfter(p))} building${tag || ""}`;
-  return ["Picking up from my last message:", line(prev), ...(cur ? [line(cur, "  ← this one")] : []), ""];
-}
 function openJobs(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay); }
 function confirmText(p) {
   const ap = appliedOfPayment(p), ids = ap.map(a => a.siteId), covered = ap.map(a => jobById(a.siteId)).sort(byFirstDay), rest = openJobs(ids), building = jobs().reduce((t, s) => t + owedOf(s), 0);
   const when = p.date === todayStr() ? "today" : "on " + fmtDay(p.date);
   return [`Hey ${bossFirst()},`, "", `Here's a breakdown for your records. I received ${money(p.amount)} ${when}${p.note ? " (" + p.note + ")" : ""}, thank you! It went to:`, "",
     ...covered.flatMap(jobBlock), ...(rest.length ? ["Other work logged so far:", "", ...rest.flatMap(jobBlock)] : []),
-    ...chainLines(p), building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function updateText() {
   const js = jobs().filter(s => stats(s).days).sort(byFirstDay), cutoff = addDays(todayStr(), -30);
@@ -1534,7 +1519,7 @@ const COLS = {
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
   Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "hash", "updated", "deleted"],
   Areas: ["id", "siteId", "address", "name", "updated", "deleted"],
-  Payments: ["id", "date", "amount", "from", "note", "after", "updated", "deleted"],
+  Payments: ["id", "date", "amount", "from", "note", "updated", "deleted"],
   Applied: ["id", "paymentId", "siteId", "address", "amount", "updated", "deleted"],
   Paints: ["id", "siteId", "address", "brand", "product", "type", "colorCode", "colorName", "sheen", "base", "orderNo", "mixedDate", "store", "storePhone", "productCode", "formula", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
@@ -1544,7 +1529,7 @@ const COLS = {
 };
 const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints", Areas: "areas", Payments: "payments", Applied: "applied" };
 const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"], Areas: ["address"], Applied: ["address"] };
-const NUM = new Set(["lat", "lng", "pay", "paidAmount", "amount", "after", "lastPay", "rate", "updated"]);
+const NUM = new Set(["lat", "lng", "pay", "paidAmount", "amount", "lastPay", "rate", "updated"]);
 function merge(local, remote) {
   const m = new Map(local.map(x => [x.id, x]));
   for (const r of remote) { const l = m.get(r.id); if (!l || (r.updated || 0) > (l.updated || 0)) m.set(r.id, r); }
