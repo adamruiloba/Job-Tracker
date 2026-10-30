@@ -789,6 +789,7 @@ function jobCard(s) {
       <div class="jc-meta">${stat}<span class="chip ${ps}">${ps === "nopay" ? "No pay set" : statusLabel[ps] + (owedOf(s) > 0 ? " · " + money(owedOf(s)) : "")}</span></div>
       <div class="jc-stats">${st.days ? `${when}${st.days} day${st.days === 1 ? "" : "s"}` : "No days yet"}${st.maxCrew ? ` · 👷 ${st.maxCrew}` : ""}</div></div></div>`;
 }
+const APP_VERSION = "2026-11-01 · map v4";
 const JOBTYPES = [["interior", "Interior"], ["exterior", "Exterior"], ["both", "Both"]], PINCOLOR = { interior: "#2f6bff", exterior: "#f08a1c", both: "#8b4fd8", "": "#8a93a5" };
 let jobsView = "list", mapBase = "street", mapObj = null, mapSaved = null, leafletReady = null;
 const hasPlace = s => s.lat !== "" && s.lat != null && s.lng !== "" && s.lng != null && isFinite(s.lat) && isFinite(s.lng);
@@ -800,14 +801,17 @@ function loadLeaflet() {
     js("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js", () => js("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js", res, res), () => { leafletReady = null; rej(new Error("map")); });
   });
 }
-let geoQueue = Promise.resolve();
+let geoQueue = Promise.resolve(), geoError = "";
 async function placeJob(s) { // looks the address up once (OpenStreetMap's free service) and remembers it on the job; tries simpler versions of the address if the exact one isn't found
   const clean = s.address.replace(/#\s*\w+|\b(apt|unit|suite|ste)\.?\s*\w+/gi, "").replace(/[.]/g, "").replace(/\s+/g, " ").trim(), parts = clean.split(",").map(x => x.trim()).filter(Boolean);
   const hasState = /\b(CA|California)\b/i.test(clean), street = parts[0] || "", city = (parts[1] || "").replace(/\b(CA|California)\b.*$/i, "").trim(), noNum = street.replace(/^\d+\s+/, "");
   const tries = [[clean + (hasState ? "" : ", CA"), ""], [`${street}, ${city}, CA`, ""], [`${noNum}, ${city}, CA`, "street"], [`${city}, CA`, "city"]].filter(([q]) => q.replace(/[,\s]/g, "").length > 2);
   for (const [q, kind] of tries) {
-    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(q)); const j = await r.json();
-    if (j[0]) { s.lat = Number(j[0].lat); s.lng = Number(j[0].lon); s.place = kind; touch(s); save(); return kind || "exact"; }
+    let hit = null;
+    try { const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(q)); if (!r.ok) throw new Error("status " + r.status); const j = await r.json(); if (j[0]) hit = [Number(j[0].lat), Number(j[0].lon)]; }
+    catch (e) { geoError = e.message || "no answer"; }
+    if (!hit) { try { const r = await fetch("https://photon.komoot.io/api/?limit=1&lang=en&lat=33.9&lon=-117.2&q=" + encodeURIComponent(q)); const j = await r.json(), f = (j.features || []).find(x => !x.properties.countrycode || x.properties.countrycode === "US"); if (f) hit = [f.geometry.coordinates[1], f.geometry.coordinates[0]]; } catch (e) { geoError = geoError || e.message || "no answer"; } }
+    if (hit) { s.lat = hit[0]; s.lng = hit[1]; s.place = kind; touch(s); save(); geoError = ""; return kind || "exact"; }
     await new Promise(r => setTimeout(r, 1100));
   }
   return false;
@@ -835,8 +839,9 @@ async function drawMap(app) {
   const all = jobs(); all.forEach(addPin);
   if (!mapSaved) { const pts = all.filter(hasPlace).map(s => [s.lat, s.lng]); if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 }); }
   let placing = null;
-  const needs = () => { const el = $("#map-needs"); if (!el) return; const list = jobs().filter(s => !hasPlace(s) || s.place === "city" || s.place === "street");
-    el.innerHTML = list.length ? `<div class="card"><h3>📍 Pins to check</h3><div class="muted">${placing ? "Tap the map where the house is." : "These aren't exact yet. Tap Place, then tap the map where the house is."}</div>${list.map(s => `<div class="line"><div class="grow"><div style="font-weight:700">${esc(streetOf(s.address))}</div><div class="muted">${hasPlace(s) ? "Approximate spot" : "Not found"}</div></div><button class="small ${placing === s.id ? "primary" : "soft"}" data-place="${s.id}">${placing === s.id ? "Tap the map…" : "📍 Place"}</button></div>`).join("")}</div>` : "";
+  const needs = () => { const el = $("#map-needs"); if (!el) return; const tot = jobs().length, on = jobs().filter(hasPlace).length, cnt = $("#map-count"); if (cnt) cnt.textContent = `${on} of ${tot} job${tot === 1 ? "" : "s"} on the map${on < tot ? " · scroll down to place the rest" : ""} · v4`; const list = jobs().filter(s => !hasPlace(s) || s.place === "city" || s.place === "street");
+    el.innerHTML = list.length ? `<div class="card"><h3>📍 Pins to check</h3><div class="muted">${placing ? "Tap the map where the house is." : "These aren't exact yet. Tap Place, then tap the map where the house is, or"} ${placing ? "" : `<button class="small" id="map-retry">try the lookup again</button>`}${geoError ? `<div style="margin-top:6px">Address lookup said: ${esc(geoError)}</div>` : ""}</div>${list.map(s => `<div class="line"><div class="grow"><div style="font-weight:700">${esc(streetOf(s.address))}</div><div class="muted">${hasPlace(s) ? "Approximate spot" : "Not found"}</div></div><button class="small ${placing === s.id ? "primary" : "soft"}" data-place="${s.id}">${placing === s.id ? "Tap the map…" : "📍 Place"}</button></div>`).join("")}</div>` : "";
+    if ($("#map-retry")) $("#map-retry").onclick = () => { render(); };
     el.querySelectorAll("[data-place]").forEach(b => b.onclick = () => { placing = placing === b.dataset.place ? null : b.dataset.place; needs(); }); };
   map.on("click", e => { if (!placing) return; const s = jobById(placing); placing = null; if (!s) return; s.lat = e.latlng.lat; s.lng = e.latlng.lng; s.place = "manual"; touch(s); save(); if (markers[s.id]) { group.removeLayer(markers[s.id]); delete markers[s.id]; } addPin(s); needs(); toast("Pin placed"); });
   needs();
@@ -850,7 +855,7 @@ function viewJobs(app) {
     app.innerHTML = `<div class="row" style="margin-bottom:10px"><div class="pills grow"><button data-jv="list">☰ List</button><button data-jv="map" class="on">🗺 Map</button></div></div>
       <div class="row" style="margin-bottom:8px"><div class="pills"><button data-mb="street" class="${mapBase === "street" ? "on" : ""}">Map</button><button data-mb="aerial" class="${mapBase === "aerial" ? "on" : ""}">Aerial</button></div>
         <div class="legend">${JOBTYPES.map(([k, l]) => `<span><i style="background:${PINCOLOR[k]}"></i>${l}</span>`).join("")}<span><i style="background:${PINCOLOR[""]}"></i>Not set</span></div></div>
-      <div id="map"></div><div class="muted" id="map-note" style="margin:8px 4px"></div><div id="map-needs"></div>`;
+      <div class="muted" id="map-count" style="margin:0 4px 6px;font-weight:600"></div><div id="map"></div><div class="muted" id="map-note" style="margin:8px 4px"></div><div id="map-needs"></div>`;
     app.querySelectorAll("[data-jv]").forEach(b => b.onclick = () => { jobsView = b.dataset.jv; render(); });
     drawMap(app); return;
   }
@@ -1618,6 +1623,7 @@ function viewSettings(app) {
       <div class="two"><div><label>Send reports to</label><input id="b-name" value="${esc(st.bossName)}" placeholder="Boss's name"></div><div><label>Your name</label><input id="m-name" value="${esc(st.myName)}" placeholder="Your name"></div></div>
       <div class="two"><div><label>Their phone (to text)</label><input id="b-phone" type="tel" value="${esc(st.bossPhone || "")}" placeholder="951-555-0100"></div><div><label>Their email</label><input id="b-mail" type="email" value="${esc(st.bossEmail || "")}" placeholder="name@email.com"></div></div>
       <div class="actions"><button class="primary" id="b-save">Save</button></div></div>
+    <div class="muted" style="text-align:center;margin:6px 0 12px">App version ${APP_VERSION}</div>
     <div class="card">
       <h3>☁️ Google sync (Sheets + Drive)</h3>
       <p class="muted" style="margin-top:0">Your jobs go into a Google Sheet called "Painter Job Tracker" in your own Drive, and photos go into a "Painter Jobs" folder. Sign in with the same Google account on any phone to see everything. One-time setup is in README.md.</p>
