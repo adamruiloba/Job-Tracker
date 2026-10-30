@@ -199,6 +199,9 @@
   .mp { cursor:pointer; font:14px/1.35 system-ui,sans-serif; color:#1b2130; } .mp-img { height:110px; border-radius:10px; background:hsl(var(--h) 55% 80%) center/cover; display:flex; align-items:center; justify-content:center; font-size:34px; }
   .mp-b { padding-top:8px; } .mp-b b { font-size:16px; } .mp-s { color:#667085; font-size:13px; } .mp-t { display:inline-block; color:#fff; font-size:12px; font-weight:700; padding:2px 9px; border-radius:99px; margin-top:6px; }
   .mp-n { margin-top:6px; color:#344054; } .mp-go { margin-top:8px; font-weight:700; color:#2f6bff; }
+  .sugg { margin-top:6px; background:var(--card); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; } .sugg:empty { display:none; }
+  .sugg button { display:flex; gap:10px; align-items:center; width:100%; text-align:left; background:transparent; border-radius:0; border-bottom:1px solid var(--line); padding:10px 12px; min-height:48px; justify-content:flex-start; }
+  .sugg button:last-of-type { border-bottom:0; } .sugg b { display:block; font-weight:700; } .sugg small { display:block; color:var(--muted); font-weight:500; font-size:13px; }
 </style>
 </head>
 <body>
@@ -433,10 +436,11 @@ function stats(s) {
   return { es, hours: es.reduce((a, v) => a + hoursOf(v), 0), days: new Set(es.map(v => dayOf(v.start))).size, manHours: man, maxCrew, crew,
     first: es[0]?.start || "", last: es[es.length - 1]?.start || "", active: es.some(v => !v.end) };
 }
-function findOrMakeJob(address) {
+function findOrMakeJob(address, geo) {
   const k = addrKey(address); let s = jobs().find(x => addrKey(x.address) === k);
-  if (s) return s;
+  if (s) { if (geo && !hasPlace(s)) { s.lat = geo.lat; s.lng = geo.lng; s.place = geo.kind; touch(s); } return s; }
   s = touch({ id: uid(), address: address.trim(), payMode: "day", pay: "", paidAmount: "", paidDate: "", paint: "", work: "", done: "", cover: "", ownerFirst: "", ownerLast: "", ownerPhone: "", ownerInfo: "", deleted: false });
+  if (geo) { s.lat = geo.lat; s.lng = geo.lng; s.place = geo.kind; }
   state.sites.push(s); return s;
 }
 function addPerson(name) {
@@ -629,14 +633,14 @@ function viewClock(app) {
       <div class="actions"><button class="small primary" id="lo-notes">Crew & notes for this day</button></div></div>` : ""}
     <div class="card">
       <h3>Start a job</h3>
-      <input id="new-addr" list="addr-list" placeholder="Type the job address" autocapitalize="words" autocomplete="off">
-      <datalist id="addr-list">${jobs().filter(x => !x.done).map(x => `<option value="${esc(x.address)}"></option>`).join("")}</datalist>
+      <input id="new-addr" placeholder="Type the job address" autocapitalize="words" autocomplete="off">
       <button class="clock" id="in" style="margin-top:12px">▶ Clock In</button>
     </div>
     ${recent.length ? `<h2>Your jobs</h2>${recent.map(x => { const st = stats(x); return `<div class="card jrow" data-job-open="${x.id}">${thumb(x, "sm")}<div class="grow"><div class="street">${esc(streetOf(x.address))}</div><div class="muted">${ownerName(x) ? esc(ownerName(x)) + " · " : ""}${st.days} day${st.days === 1 ? "" : "s"}</div></div><button class="small primary" data-clockin="${x.id}">▶ Clock in</button></div>`; }).join("")}` : ""}
     <h2>Today ${today.length ? `· ${fmtHrs(todayHrs)} · ${todayJobs} job${todayJobs === 1 ? "" : "s"}` : ""}</h2>
     ${today.length ? today.map(v => dayCard(v)).join("") : `<div class="muted" style="padding:0 4px">No time logged yet today.</div>`}`;
-  $("#in").onclick = () => { const x = $("#new-addr").value.trim(); if (!x) return toast("Type the job address first"); startEntry(findOrMakeJob(x)); };
+  const geoOf = addressSuggest($("#new-addr"));
+  $("#in").onclick = () => { const x = $("#new-addr").value.trim(); if (!x) return toast("Type the job address first"); startEntry(findOrMakeJob(x, geoOf())); };
   if (lo) {
     $("#lo-x").onclick = () => { lastOut = null; render(); };
     $("#lo-notes").onclick = () => { tab = "jobs"; openJob = lo.siteId; openEntry = lo.id; render(); };
@@ -663,6 +667,44 @@ function recentJobs() {
   const last = {}; entries().forEach(v => { if (!last[v.siteId] || v.start > last[v.siteId]) last[v.siteId] = v.start; });
   return jobs().filter(s => !s.done).sort((a, b) => (last[b.id] || "").localeCompare(last[a.id] || "")).slice(0, 6);
 }
+/* "did you mean…?": as you type an address it offers your saved jobs first, then real addresses (OpenStreetMap data via Photon, built for typing-as-you-go). Picking one fills in the full, correctly spelled address and remembers its spot for the map. */
+const STREET_ABBR = [[/\bStreet\b/i, "St"], [/\bAvenue\b/i, "Ave"], [/\bCourt\b/i, "Ct"], [/\bRoad\b/i, "Rd"], [/\bDrive\b/i, "Dr"], [/\bLane\b/i, "Ln"], [/\bBoulevard\b/i, "Blvd"], [/\bPlace\b/i, "Pl"], [/\bCircle\b/i, "Cir"], [/\bTerrace\b/i, "Ter"], [/\bHighway\b/i, "Hwy"], [/\bParkway\b/i, "Pkwy"]];
+const STATES = { California: "CA", Arizona: "AZ", Nevada: "NV", Oregon: "OR", Washington: "WA", Texas: "TX", Utah: "UT", Colorado: "CO", Florida: "FL", "New Mexico": "NM" };
+async function suggestAddresses(q, signal) {
+  const num = (q.match(/^\s*(\d+[A-Za-z]?)\s+\S/) || [])[1] || "";
+  const r = await fetch("https://photon.komoot.io/api/?lang=en&limit=8&lat=33.9&lon=-117.2&q=" + encodeURIComponent(q), { signal }); const j = await r.json(), out = [], seen = new Set();
+  for (const f of [...(j.features || [])].sort((x, y) => !!(y.properties || {}).housenumber - !!(x.properties || {}).housenumber)) {
+    const pr = f.properties || {}; if (pr.countrycode && pr.countrycode !== "US") continue;
+    let street = pr.street || (pr.osm_key === "highway" ? pr.name : ""); if (!street) continue;
+    for (const [re, ab] of STREET_ABBR) street = street.replace(re, ab);
+    const hn = pr.housenumber || num, city = pr.city || pr.town || pr.village || pr.locality || pr.district || "", st = STATES[pr.state] || pr.state || "";
+    const label = [`${hn ? hn + " " : ""}${street}`, city, [st, pr.postcode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+    if (seen.has(label.toLowerCase())) continue; seen.add(label.toLowerCase());
+    const [lng, lat] = (f.geometry || {}).coordinates || []; out.push({ label, lat, lng, kind: pr.housenumber ? "" : "street" });
+  }
+  return out;
+}
+function addressSuggest(input, onChoose) {
+  const box = document.createElement("div"); box.className = "sugg"; input.insertAdjacentElement("afterend", box);
+  let timer, ctl, picked = null;
+  const show = (saved, found, busy) => {
+    box.innerHTML = [...saved.map((s, i) => `<button type="button" data-sv="${i}"><span>🏠</span><span><b>${esc(streetOf(s.address))}</b><small>${esc(s.address.split(",").slice(1).join(",").trim() || "Saved job")}</small></span></button>`),
+      ...found.map((f, i) => `<button type="button" data-fd="${i}"><span>📍</span><span><b>${esc(f.label.split(",")[0])}</b><small>${esc(f.label.split(",").slice(1).join(",").trim())}</small></span></button>`)].join("") + (busy ? `<div class="muted" style="padding:8px 12px">Looking up addresses…</div>` : "");
+    box.querySelectorAll("[data-sv]").forEach(b => b.onpointerdown = e => { e.preventDefault(); const s = saved[+b.dataset.sv]; input.value = s.address; picked = null; box.innerHTML = ""; if (onChoose) onChoose(); });
+    box.querySelectorAll("[data-fd]").forEach(b => b.onpointerdown = e => { e.preventDefault(); const f = found[+b.dataset.fd]; input.value = f.label; picked = f; box.innerHTML = ""; if (onChoose) onChoose(); });
+  };
+  const savedFor = q => jobs().filter(s => !q || normAddr(s.address).includes(normAddr(q))).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0)).slice(0, q ? 3 : 4);
+  input.addEventListener("focus", () => { if (!input.value.trim()) show(savedFor(""), []); });
+  input.addEventListener("blur", () => setTimeout(() => { box.innerHTML = ""; }, 150));
+  input.addEventListener("input", () => {
+    picked = null; clearTimeout(timer); if (ctl) ctl.abort(); const q = input.value.trim();
+    if (q.length < 3) return show(savedFor(q), []);
+    show(savedFor(q), [], q.length >= 5);
+    if (q.length < 5) return;
+    timer = setTimeout(async () => { ctl = new AbortController(); try { const found = await suggestAddresses(q, ctl.signal); if (input.value.trim() === q) show(savedFor(q), found); } catch { if (input.value.trim() === q) show(savedFor(q), []); } }, 350);
+  });
+  return () => picked && input.value === picked.label ? { lat: picked.lat, lng: picked.lng, kind: picked.kind } : null; // the spot, if a suggestion was picked
+}
 function chooseJobUI(box, onPick, openOnly) {
   const list = jobs().filter(x => !openOnly || !x.done).sort((a, b) => a.address.localeCompare(b.address));
   box.innerHTML = `<div class="card"><h3>Pick a job</h3>
@@ -670,8 +712,9 @@ function chooseJobUI(box, onPick, openOnly) {
     <label>Or type an address</label><input id="pk-new" placeholder="123 Main St, Springfield" autocapitalize="words">
     <div class="actions"><button class="primary" id="pk-go">Go</button><button id="pk-x">Cancel</button></div></div>`;
   $("#pk-x").onclick = () => { box.innerHTML = ""; };
+  const geoOf = addressSuggest($("#pk-new"));
   $("#pk-go").onclick = () => {
-    const addr = $("#pk-new").value.trim(), job = addr ? findOrMakeJob(addr) : jobById($("#pk-sel")?.value);
+    const addr = $("#pk-new").value.trim(), job = addr ? findOrMakeJob(addr, geoOf()) : jobById($("#pk-sel")?.value);
     if (job) onPick(job); else toast("Pick a job or type an address");
   };
 }
@@ -892,9 +935,10 @@ function tabDetails(box, s) {
     <div class="actions" style="justify-content:space-between"><button class="soft small" id="j-merge">⇄ Merge with another job</button><button class="danger small" id="j-del">Delete job</button></div>
     <div id="merge-box"></div>`;
   box.querySelectorAll("[data-jt]").forEach(b => b.onclick = () => { s.jobType = s.jobType === b.dataset.jt ? "" : b.dataset.jt; touch(s); save(); render(); });
+  const geoOfAddr = addressSuggest($("#d-addr"));
   $("#d-addr-save").onclick = () => {
     const a = $("#d-addr").value.trim(); if (!a || a === s.address) return;
-    s.address = a; touch(s); const before = jobs().length; save();
+    const g = geoOfAddr(); s.address = a; if (g) { s.lat = g.lat; s.lng = g.lng; s.place = g.kind; } else { s.lat = ""; s.lng = ""; s.place = ""; } touch(s); const before = jobs().length; save();
     toast(jobs().length < before ? "Merged with the job that already has this address" : "Address saved"); render();
   };
   $("#o-save").onclick = () => { Object.assign(s, { ownerFirst: $("#o-first").value.trim(), ownerLast: $("#o-last").value.trim(), ownerPhone: $("#o-phone").value.trim(), ownerInfo: $("#o-info").value }); touch(s); save(); toast("Contact saved"); render(); };

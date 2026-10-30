@@ -82,3 +82,6 @@ On the **Jobs** tab, switch from **☰ List** to **🗺 Map**. Every job is a pi
 
 ## Sheen on paint labels
 "Semi-gloss" now reads **Semi-gloss / Medium luster** (cans often say "medium luster"), and the label reader maps "Medium Luster" to it. Paints already saved as Semi-gloss were updated.
+
+## Typing an address
+Wherever you type a job address (Clock tab, picking a job, a job's Details), the app suggests as you type: your **saved jobs** first (🏠), then **real addresses** (📍). Tap one and it fills in the full address, spelled and formatted the same way every time (Street → St, with city, state and ZIP), and remembers the spot for the map. If nothing matches, just keep typing; it uses exactly what you typed. Suggestions need internet.
