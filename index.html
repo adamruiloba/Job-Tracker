@@ -979,11 +979,15 @@ const jobBlock = s => [`• ${jobHead(s)}`, ...dayLines(s), jobFoot(s), ""];
 /* messages pick up from the last one: the previous payment, this payment, and what was building after each (no growing history) */
 function openJobs(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay); }
 function confirmText(p) {
-  const ap = appliedOfPayment(p), ids = ap.map(a => a.siteId), covered = ap.map(a => jobById(a.siteId)).sort(byFirstDay), rest = openJobs(ids), building = jobs().reduce((t, s) => t + owedOf(s), 0);
-  const when = p.date === todayStr() ? "today" : "on " + fmtDay(p.date);
+  const ap = appliedOfPayment(p), ids = ap.map(a => a.siteId), covered = ap.map(a => jobById(a.siteId)).sort(byFirstDay), rest = openJobs(ids), now = jobs().reduce((t, s) => t + owedOf(s), 0);
+  const when = p.date === todayStr() ? "today" : "on " + fmtDay(p.date), asOf = fmtShort(todayStr());
+  const was = covered.map(s => ({ s, amt: r2(owedOf(s) + ap.filter(a => a.siteId === s.id).reduce((t, a) => t + Number(a.amount), 0)) })).concat(rest.map(s => ({ s, amt: owedOf(s) }))).filter(x => x.amt > 0.004).sort((x, y) => byFirstDay(x.s, y.s));
+  const before = r2(was.reduce((t, x) => t + x.amt, 0)), ps = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id)), prev = ps[ps.findIndex(x => x.id === p.id) - 1];
   return [`Hey ${bossFirst()},`, "", `Here's a breakdown for your records. I received ${money(p.amount)} ${when}${p.note ? " (" + p.note + ")" : ""}, thank you! It went to:`, "",
     ...covered.flatMap(jobBlock), ...(rest.length ? ["Other work logged so far:", "", ...rest.flatMap(jobBlock)] : []),
-    building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    ...(prev ? [`Last payment: ${fmtShort(prev.date)} · ${money(prev.amount)}`] : []),
+    `Due before this payment: ${money(before)}${was.length > 1 ? " (" + was.map(x => `${streetOf(x.s.address).replace(/^\d+\s+/, "").replace(/\s+(St|Ave|Ct|Rd|Dr|Ln|Blvd|Way|Pl)\b.*$/i, "")} ${money(x.amt)}`).join(" + ") + ")" : ""}`,
+    `This payment (${fmtShort(p.date)}): −${money(p.amount)}`, now > 0.004 ? `Remaining due as of ${asOf}: ${money(now)}` : `Remaining due as of ${asOf}: $0 ✓ all caught up`, "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function updateText() {
   const js = jobs().filter(s => stats(s).days).sort(byFirstDay), cutoff = addDays(todayStr(), -30);
