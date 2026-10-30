@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6bff">
+<meta name="robots" content="noindex">
+<title>Jobs & Payments (view only)</title>
+<style>
+  :root { --bg:#f2f4f9; --card:#fff; --ink:#1b2130; --muted:#667085; --line:#e6e9f0; --field:#f6f7fb; --brand:#2f6bff; --brand-soft:#e7eeff; --good:#117a57; --good-soft:#dcf4ea; --warn:#a85a05; --warn-soft:#fff0d9; --shadow:0 1px 2px rgba(20,30,60,.05), 0 8px 22px rgba(20,30,60,.06); }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1218; --card:#181d26; --ink:#eef1f6; --muted:#9aa3b2; --line:#283040; --field:#10141b; --brand:#6b95ff; --brand-soft:#1b2744; --good:#4ade9f; --good-soft:#12342a; --warn:#fbbf4a; --warn-soft:#3a2b10; --shadow:0 1px 2px rgba(0,0,0,.4); } }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:14px 16px 60px; }
+  a { color:var(--brand); text-decoration:none; }
+  button { font:inherit; font-weight:600; border:0; background:var(--field); color:var(--ink); border-radius:12px; padding:11px 16px; cursor:pointer; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  button.primary { background:var(--brand); color:#fff; } button.on { background:var(--ink); color:var(--card); }
+  button.small { padding:7px 12px; min-height:36px; font-size:14px; border-radius:10px; }
+  input[type=date] { font:inherit; color:var(--ink); background:var(--field); border:2px solid transparent; border-radius:10px; padding:8px 10px; }
+  .top { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:24px; margin:10px 0 2px; letter-spacing:-.3px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .card { background:var(--card); border-radius:18px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  .controls button { background:var(--card); box-shadow:var(--shadow); color:var(--muted); }
+  .controls button.on { background:var(--ink); color:var(--card); }
+  .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0; }
+  .tile { background:var(--card); border-radius:16px; padding:12px 14px; box-shadow:var(--shadow); }
+  .tile .k { font-size:12px; color:var(--muted); font-weight:600; } .tile .v { font-size:21px; font-weight:800; letter-spacing:-.4px; margin-top:2px; }
+  .paid { color:var(--good); } .owed { color:var(--warn); }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin:22px 4px 8px; font-weight:700; }
+  .job h3 { margin:0; font-size:18px; line-height:1.25; }
+  .days { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+  .d { font-size:13px; font-weight:700; padding:4px 10px; border-radius:99px; background:var(--brand-soft); color:var(--brand); white-space:nowrap; }
+  .d.half { background:var(--warn-soft); color:var(--warn); }
+  .money3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding-top:10px; border-top:1px solid var(--line); }
+  .money3 .k { font-size:12px; color:var(--muted); font-weight:600; } .money3 .v { font-size:18px; font-weight:800; }
+  .badge { font-size:12px; font-weight:700; padding:3px 9px; border-radius:99px; background:var(--good-soft); color:var(--good); white-space:nowrap; }
+  .badge.o { background:var(--warn-soft); color:var(--warn); }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .total { background:var(--ink); color:var(--card); border-radius:18px; padding:16px; margin-top:14px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .total .k { font-size:12px; opacity:.75; font-weight:600; } .total .v { font-size:20px; font-weight:800; }
+  .empty { text-align:center; color:var(--muted); padding:30px 12px; }
+  @media print { .noprint { display:none !important; } body { background:#fff; color:#000; } .card, .tile { box-shadow:none; border:1px solid #ddd; } .total { background:#fff; color:#000; border:2px solid #000; } .wrap { max-width:none; padding:0; } }
+</style>
+<style>
+  details.job { padding:0; } details.job > summary { list-style:none; cursor:pointer; padding:16px; } details.job > summary::-webkit-details-marker { display:none; }
+  details.job .inner { padding:0 16px 16px; }
+  .drow { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--line); font-size:15px; }
+  .drow small { display:block; color:var(--muted); font-size:13px; }
+  .pill { font-size:12px; font-weight:700; padding:3px 9px; border-radius:99px; background:var(--warn-soft); color:var(--warn); white-space:nowrap; }
+  .pill.g { background:var(--good-soft); color:var(--good); }
+  .chev { color:var(--muted); font-size:13px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="ttl">Jobs & payments</h1>
+  <div class="muted" id="sub"></div>
+  <div id="app"><div class="empty">Loading…</div></div>
+  <div class="muted" style="margin-top:22px;text-align:center">This is a read-only snapshot. Ask for a fresh link any time you want the latest.</div>
+</div>
+<script>
+"use strict";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => (Number(n) || 0).toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const D = s => new Date(String(s).slice(0, 10) + "T12:00:00");
+const fmt = s => D(s).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const fmtY = s => D(s).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const b64 = u => { u = u.replace(/-/g, "+").replace(/_/g, "/"); while (u.length % 4) u += "="; return Uint8Array.from(atob(u), c => c.charCodeAt(0)); };
+async function decode(h) {
+  const kind = h[0], bytes = b64(h.slice(1));
+  if (kind === "u") return JSON.parse(new TextDecoder().decode(bytes));
+  const ds = new DecompressionStream("deflate-raw"), w = ds.writable.getWriter(); w.write(bytes); w.close();
+  return JSON.parse(await new Response(ds.readable).text());
+}
+const dayName = d => d[1] === "half" ? "Half day" : d[1] === "custom" ? "Custom day" : "Full day";
+function draw(S) {
+  const jobs = S.j.map((j, i) => ({ ...j, i, owed: Math.max(0, j.tot - j.paid) })), earned = jobs.reduce((t, j) => t + j.tot, 0), got = jobs.reduce((t, j) => t + j.paid, 0), due = jobs.reduce((t, j) => t + j.owed, 0);
+  document.title = "Jobs & payments" + (S.n ? " · " + S.n : "");
+  $("#ttl").textContent = (S.n ? S.n + "'s jobs" : "Jobs") + " & payments"; $("#sub").textContent = "Snapshot from " + fmtY(S.t);
+  const order = [...jobs].sort((a, b) => (b.owed > 0) - (a.owed > 0) || (b.d[b.d.length - 1] || ["" ])[0].localeCompare((a.d[a.d.length - 1] || [""])[0]));
+  const jobHtml = j => `<details class="card job"><summary><div class="row"><div><h3>${esc(j.a.split(",")[0])}</h3><div class="muted">${esc(j.a.split(",").slice(1).join(",").trim())}${j.d.length ? " · " + fmt(j.d[0][0]) + (j.d.length > 1 ? "–" + fmt(j.d[j.d.length - 1][0]) : "") : ""}</div></div>${j.tot && !j.owed ? `<span class="pill g">✓ Paid in full</span>` : j.owed ? `<span class="pill">${money(j.owed)} due</span>` : ""}</div>
+    <div class="money3" style="margin-top:12px"><div><div class="k">Job total</div><div class="v">${money(j.tot)}</div></div><div><div class="k">Received</div><div class="v paid">${money(j.paid)}</div></div><div><div class="k">Due</div><div class="v ${j.owed ? "owed" : ""}">${money(j.owed)}</div></div></div><div class="chev">Tap to see the days and payments ▾</div></summary>
+    <div class="inner">${j.m ? `<div class="drow"><span>One price for the whole job</span><b>${money(j.tot)}</b></div>` : j.d.map(d => `<div class="drow"><span>${fmt(d[0])} · ${dayName(d)}${d[3] ? `<small>${esc(d[3])}</small>` : ""}</span><b>${money(d[2])}</b></div>`).join("")}
+    ${S.p.flatMap(p => p.to.filter(t => t[0] === j.i).map(t => `<div class="drow"><span style="color:var(--good)">💵 Received ${fmt(p.d)}${p.f ? " from " + esc(p.f) : ""}</span><b class="paid">${money(t[1])}</b></div>`)).join("")}
+    ${j.e ? `<div class="drow"><span style="color:var(--good)">💵 Earlier payments</span><b class="paid">${money(j.e)}</b></div>` : ""}</div></details>`;
+  const pays = [...S.p].sort((a, b) => b.d.localeCompare(a.d));
+  $("#app").innerHTML = `<div class="tiles"><div class="tile"><div class="k">All jobs</div><div class="v">${money(earned)}</div></div><div class="tile"><div class="k">Received</div><div class="v paid">${money(got)}</div></div><div class="tile"><div class="k">Due now</div><div class="v owed">${money(due)}</div></div></div>
+    <h2>Jobs</h2>${order.map(jobHtml).join("") || `<div class="empty">No jobs yet.</div>`}
+    <h2>Payments received</h2>${pays.length ? `<div class="card">${pays.map(p => `<div class="drow" style="${p === pays[0] ? "border-top:0" : ""}"><span>${fmtY(p.d)}${p.f ? " · " + esc(p.f) : ""}${p.n ? `<small>${esc(p.n)}</small>` : ""}<small>${p.to.map(t => esc((S.j[t[0]] || { a: "" }).a.split(",")[0]) + " " + money(t[1])).join(" · ")}</small></span><b class="paid">${money(p.a)}</b></div>`).join("")}</div>` : `<div class="empty">No payments yet.</div>`}`;
+}
+const $ = s => document.querySelector(s);
+(async () => {
+  const h = location.hash.replace(/^#/, "");
+  if (!h) { $("#app").innerHTML = `<div class="empty">Open this page from the link you were sent.</div>`; return; }
+  try { draw(await decode(h)); } catch { $("#app").innerHTML = `<div class="empty">This link looks incomplete. Ask for a new one.</div>`; }
+})();
+</script>
+</body>
+</html>

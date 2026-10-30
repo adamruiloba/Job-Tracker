@@ -1013,6 +1013,16 @@ function openSendSheet(title, text, subject) {
   $("#sd-copy").onclick = async () => { try { await navigator.clipboard.writeText(msg()); toast("Copied"); } catch { prompt("Copy this:", msg()); } };
   $("#sd-x").onclick = () => bg.remove();
 }
+/* a read-only snapshot link: the data rides in the part of the web address after the "#", which is never sent to any server */
+async function shareLink() {
+  const js = jobs().filter(s => stats(s).days || jobTotal(s) > 0).sort(byFirstDay), idx = Object.fromEntries(js.map((s, i) => [s.id, i]));
+  const snap = { t: todayStr(), n: myNameSig(), j: js.map(s => ({ a: s.address, m: s.payMode === "flat" ? 1 : 0, d: stats(s).es.map(v => [dayOf(v.start), v.dayType || "full", dayRate(v), (v.notes || "").replace(/\s+/g, " ").slice(0, 80)]), tot: jobTotal(s), paid: paidOf(s), e: Number(s.paidAmount) || 0 })),
+    p: state.payments.filter(live).map(p => ({ d: p.date, a: Number(p.amount), f: p.from || "", n: p.note || "", to: appliedOfPayment(p).filter(a => idx[a.siteId] !== undefined).map(a => [idx[a.siteId], Number(a.amount)]) })) };
+  const raw = new TextEncoder().encode(JSON.stringify(snap)), u = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  let h;
+  try { const cs = new CompressionStream("deflate-raw"), w = cs.writable.getWriter(); w.write(raw); w.close(); h = "z" + u(new Uint8Array(await new Response(cs.readable).arrayBuffer())); } catch { h = "u" + u(raw); }
+  return new URL("view.html", location.href).href.split("#")[0] + "#" + h;
+}
 const payerName = () => state.settings.bossName || "";
 function appliedLine(p) { const ap = appliedOfPayment(p); return ap.length ? ap.map(a => `${esc(streetOf(jobById(a.siteId).address))} ${money(a.amount)}`).join(" · ") : ""; }
 /* the "I got paid" sheet: type the amount, see which jobs it covers (oldest first), adjust, save */
@@ -1423,6 +1433,7 @@ function viewPay(app) {
     <button class="primary block" id="got-paid" style="margin:4px 0 12px;min-height:54px;font-size:18px">💵 I got paid</button>
     ${pending > 0 ? `<div class="card" style="background:var(--warn-soft)"><strong>${money(pending)} received but not applied to a job yet</strong><div class="muted">Find it under Payments received and tap “Apply to jobs”.</div></div>` : ""}
     <button class="block" id="send-update" style="margin:0 0 12px">📤 Send ${esc(state.settings.bossName || "my boss")} an update</button>
+    <button class="block" id="share-link" style="margin:0 0 12px">🔗 Share a view-only link with ${esc(state.settings.bossName || "my boss")}</button>
     <a class="card row tap" href="report.html" style="color:inherit;text-decoration:none"><span><strong>📤 Report for ${esc(state.settings.bossName || "your boss")}</strong><div class="muted">Jobs, days worked, owed and paid. Easy to send.</div></span><span style="font-size:22px">›</span></a>
     <a class="card row tap" href="ledger.html" style="color:inherit;text-decoration:none"><span><strong>📒 Ledger</strong><div class="muted">By job, by day, and a day × job grid</div></span><span style="font-size:22px">›</span></a>
     ${noPrice.length ? `<div class="card" style="background:var(--warn-soft)"><strong>${noPrice.length} job${noPrice.length > 1 ? "s" : ""} with no pay yet</strong><div class="muted">Open each job → Pay and set the day rates so they count here.</div></div>` : ""}
@@ -1437,6 +1448,7 @@ function viewPay(app) {
     <div class="actions"><button id="csv-jobs">⬇️ Jobs (CSV)</button><button id="csv-time">⬇️ Days (CSV)</button></div>`;
   app.querySelectorAll("[data-job-open]").forEach(c => c.onclick = () => goJob(c.dataset.jobOpen, "pay"));
   $("#got-paid").onclick = () => openPaySheet();
+  $("#share-link").onclick = async () => { const url = await shareLink(); openSendSheet("🔗 Share a view-only link", `Hey ${bossFirst()},\n\nHere's a link to see how I'm keeping track of the jobs and payments. It's view-only and has the day-by-day for every job:\n\n${url}\n\nLet me know if you have any questions or want me to change anything.${myNameSig() ? "\n— " + myNameSig() : ""}`, "How I'm tracking the jobs"); };
   $("#send-update").onclick = () => openSendSheet("📤 Send an update", updateText(), "Job and payment update");
   hookPayments(app);
   app.querySelectorAll("[data-full]").forEach(b => b.onclick = () => { const s = jobById(b.dataset.full); addPayment({ amount: owedOf(s), date: todayStr(), from: payerName() }, [{ s, amt: owedOf(s) }]); save(); toast("Marked paid"); render(); });
