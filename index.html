@@ -950,6 +950,7 @@ function tabNotes(box, s) {
 function addPayment(o, allocs) {
   const p = touch({ id: uid(), date: o.date || todayStr(), amount: r2(Number(o.amount)), from: (o.from || "").trim(), note: (o.note || "").trim(), deleted: false }); state.payments.push(p);
   for (const a of allocs) if (a.amt > 0) state.applied.push(touch({ id: uid(), paymentId: p.id, siteId: a.s.id, amount: r2(a.amt), deleted: false }));
+  p.after = r2(jobs().reduce((t, j) => t + owedOf(j), 0)); // what was still building right after this payment, so the next message can pick up from it
   return p;
 }
 function autoPlan(avail) {
@@ -976,11 +977,12 @@ function jobFoot(s) {
   return `  Job total: ${money(jobTotal(s))}${got.length ? " · received " + got.join(", ") : ""}${owedOf(s) <= 0 && jobTotal(s) > 0 ? " ✓ paid in full" : ""}`;
 }
 const jobBlock = s => [`• ${jobHead(s)}`, ...dayLines(s), jobFoot(s), ""];
-/* every payment, oldest first, with the jobs it went to, so the messages can be followed like a timeline */
-function timelineLines(currentId) {
-  const ps = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
-  if (!ps.length) return [];
-  return ["Payments received so far:", ...ps.flatMap(p => { const ap = appliedOfPayment(p), un = unappliedOf(p); return [`• ${fmtDay(p.date)}: ${money(p.amount)}${p.from ? " from " + p.from : ""}${p.id === currentId ? "  ← this one" : ""}`, ...ap.map(a => `   → ${streetOf(jobById(a.siteId).address)} ${money(a.amount)}`), ...(un > 0 ? [`   → ${money(un)} not assigned to a job yet`] : [])]; }), ""];
+/* messages pick up from the last one: the previous payment, this payment, and what was building after each (no growing history) */
+function chainLines(cur) {
+  const ps = state.payments.filter(live).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id)), i = cur ? ps.findIndex(p => p.id === cur.id) : ps.length, prev = i > 0 ? ps[i - 1] : null;
+  if (!prev) return [];
+  const line = (p, tag) => `• ${fmtShort(p.date)}: ${money(p.amount)} received${p.after != null && p.after !== "" ? ` → ${money(p.after)} building` : ""}${tag || ""}`;
+  return ["Picking up from my last message:", line(prev), ...(cur ? [line(cur, "  ← this one")] : []), ""];
 }
 function openJobs(skipIds) { return jobs().filter(s => owedOf(s) > 0 && stats(s).days && !skipIds.includes(s.id)).sort(byFirstDay); }
 function confirmText(p) {
@@ -988,12 +990,15 @@ function confirmText(p) {
   const when = p.date === todayStr() ? "today" : "on " + fmtDay(p.date);
   return [`Hey ${bossFirst()},`, "", `Here's a breakdown for your records. I received ${money(p.amount)} ${when}${p.note ? " (" + p.note + ")" : ""}, thank you! It went to:`, "",
     ...covered.flatMap(jobBlock), ...(rest.length ? ["Other work logged so far:", "", ...rest.flatMap(jobBlock)] : []),
-    ...timelineLines(p.id), building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    ...chainLines(p), building > 0 ? `Amount currently building: ${money(building)}` : "That brings everything up to date ✓", "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function updateText() {
-  const js = jobs().filter(s => stats(s).days).sort(byFirstDay), earned = js.reduce((t, s) => t + jobTotal(s), 0), paid = js.reduce((t, s) => t + paidOf(s), 0), building = js.reduce((t, s) => t + owedOf(s), 0);
-  return [`Hey ${bossFirst()},`, "", "Here's a breakdown of all the jobs so far, so you have it for your records:", "",
-    ...js.flatMap(jobBlock), `Total of all jobs: ${money(earned)} · received ${money(paid)}`, "", ...timelineLines(""), `Amount currently building: ${money(building)}`, "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const js = jobs().filter(s => stats(s).days).sort(byFirstDay), cutoff = addDays(todayStr(), -30);
+  const shown = js.filter(s => owedOf(s) > 0 || (lastPaidOn(s) || "") >= cutoff), old = js.filter(s => !shown.includes(s));
+  const earned = js.reduce((t, s) => t + jobTotal(s), 0), paid = js.reduce((t, s) => t + paidOf(s), 0), building = js.reduce((t, s) => t + owedOf(s), 0), last = paymentsNewest()[0];
+  return [`Hey ${bossFirst()},`, "", "Here's a breakdown of where the jobs stand, so you have it for your records:", "",
+    ...shown.flatMap(jobBlock), ...(old.length ? [`Earlier jobs, all paid: ${old.length} job${old.length > 1 ? "s" : ""} · ${money(old.reduce((t, s) => t + jobTotal(s), 0))}`, ""] : []),
+    `All jobs: ${money(earned)} · received ${money(paid)}`, ...(last ? [`Last payment: ${money(last.amount)} on ${fmtDay(last.date)}`] : []), `Amount currently building: ${money(building)}`, "", ...thanks()].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 /* sheet with the message ready to send by text, email or any app */
 function openSendSheet(title, text, subject) {
@@ -1521,7 +1526,7 @@ const COLS = {
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
   Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "hash", "updated", "deleted"],
   Areas: ["id", "siteId", "address", "name", "updated", "deleted"],
-  Payments: ["id", "date", "amount", "from", "note", "updated", "deleted"],
+  Payments: ["id", "date", "amount", "from", "note", "after", "updated", "deleted"],
   Applied: ["id", "paymentId", "siteId", "address", "amount", "updated", "deleted"],
   Paints: ["id", "siteId", "address", "brand", "product", "type", "colorCode", "colorName", "sheen", "base", "orderNo", "mixedDate", "store", "storePhone", "productCode", "formula", "size", "areas", "photoFront", "photoTop", "notes", "labelText", "updated", "deleted"],
   Notes: ["id", "siteId", "address", "date", "text", "updated", "deleted"],
@@ -1531,7 +1536,7 @@ const COLS = {
 };
 const ARR = { Sites: "sites", Visits: "visits", Photos: "photos", Notes: "notes", Contacts: "contacts", People: "people", CrewNotes: "tasks", Paints: "paints", Areas: "areas", Payments: "payments", Applied: "applied" };
 const DERIVED = { Visits: ["address", "hours", "crewNames"], Notes: ["address"], Contacts: ["address"], CrewNotes: ["address", "personName"], Paints: ["address"], Areas: ["address"], Applied: ["address"] };
-const NUM = new Set(["lat", "lng", "pay", "paidAmount", "amount", "lastPay", "rate", "updated"]);
+const NUM = new Set(["lat", "lng", "pay", "paidAmount", "amount", "after", "lastPay", "rate", "updated"]);
 function merge(local, remote) {
   const m = new Map(local.map(x => [x.id, x]));
   for (const r of remote) { const l = m.get(r.id); if (!l || (r.updated || 0) > (l.updated || 0)) m.set(r.id, r); }
