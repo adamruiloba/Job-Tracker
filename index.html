@@ -521,7 +521,31 @@ function setDayType(v, type, onlyIfDefault, was) {
 let tab = "clock", openJob = null, openEntry = null, openPaint = null, openArea = null, paintReturnArea = null, jobTab = null, q = "", dateQ = "", jobFilter = "all", timerHandle = null;
 let calMonth = todayStr().slice(0, 7), calSel = todayStr(), calView = "month";
 const TITLES = { clock: "Clock", calendar: "Calendar", pay: "Pay", settings: "Settings" };
-function render() {
+/* keep your place: which page you're on and what you've typed but not saved survives the phone sleeping, a call, another app, or the browser reloading the page */
+const VIEW_KEY = "painterJobs.view";
+let dirty = {}, lastViewKey = "", persistTimer = null;
+const viewKey = () => [tab, openJob, openEntry, openPaint, openArea, jobTab].join("|");
+function persistView() {
+  clearTimeout(persistTimer);
+  try { localStorage.setItem(VIEW_KEY, JSON.stringify({ t: Date.now(), tab, openJob, openEntry, openPaint, openArea, jobTab, calMonth, calSel, calView, key: viewKey(), fields: dirty, y: window.scrollY })); } catch {}
+}
+const persistSoon = () => { clearTimeout(persistTimer); persistTimer = setTimeout(persistView, 400); };
+function noteTyping(e) { const t = e.target; if (!t || !t.id || t.type === "file" || t.type === "password" || !t.closest("#app")) return; dirty[t.id] = t.type === "checkbox" || t.type === "radio" ? { c: t.checked } : { v: t.value }; persistSoon(); }
+function restoreTyping() { for (const [id, f] of Object.entries(dirty)) { const el = document.getElementById(id); if (!el) continue; if ("c" in f) el.checked = f.c; else if (el.value !== f.v) el.value = f.v; } }
+function restoreView() {
+  let v; try { v = JSON.parse(localStorage.getItem(VIEW_KEY)); } catch {}
+  if (!v || Date.now() - v.t > 3 * 864e5) return false;
+  tab = v.tab || tab; calMonth = v.calMonth || calMonth; calSel = v.calSel || calSel; calView = v.calView || calView;
+  if (tab === "jobs" && v.openJob && jobById(v.openJob)) {
+    openJob = v.openJob; jobTab = v.jobTab || null;
+    if (v.openEntry && state.visits.some(x => x.id === v.openEntry && live(x))) openEntry = v.openEntry;
+    else if (v.openPaint && state.paints.some(x => x.id === v.openPaint && live(x))) openPaint = v.openPaint;
+    else if (v.openArea) openArea = v.openArea;
+  }
+  lastViewKey = viewKey(); dirty = v.key === lastViewKey ? (v.fields || {}) : {};
+  return v.y || 0;
+}
+function render(keep) {
   clearInterval(timerHandle);
   if (openJob && redirects[openJob]) openJob = redirects[openJob];
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
@@ -533,6 +557,8 @@ function render() {
   else if (tab === "pay") viewPay(app);
   else viewSettings(app);
   syncLabel(); fillThumbs(app); fillPaintPhotos(app);
+  const k = viewKey(); if (!(keep && k === lastViewKey)) dirty = {}; lastViewKey = k;
+  if (keep) restoreTyping(); persistView();
 }
 const goJob = (id, t) => { tab = "jobs"; openJob = id; openEntry = null; openPaint = null; openArea = null; jobTab = t || null; render(); window.scrollTo(0, 0); };
 
@@ -1623,13 +1649,18 @@ async function syncNow(quiet) {
     syncMsg = "✓ Synced";
   } catch (e) { syncMsg = "⚠️ Retry sync"; toast("Sync failed: " + e.message, 5000); }
   syncing = false;
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.querySelector(".sheet-bg")) syncLabel(); else render(); // don't wipe what's being typed
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.querySelector(".sheet-bg")) syncLabel(); else render(true); // keep what's being typed
 }
 
 /* ---------- boot ---------- */
 $("#syncbtn").onclick = () => syncNow();
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.tab; if (tab === "jobs") { openJob = null; openEntry = null; openPaint = null; openArea = null; } render(); window.scrollTo(0, 0); });
-load(); render();
+load();
+const y0 = restoreView(); render(true);
+if (y0) setTimeout(() => window.scrollTo(0, y0), 60);
+document.addEventListener("input", noteTyping, true); document.addEventListener("change", noteTyping, true);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") persistView(); });
+addEventListener("pagehide", persistView); addEventListener("scroll", persistSoon, { passive: true });
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 </script>
 </body>

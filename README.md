@@ -73,3 +73,6 @@ On the **Pay** tab tap **💵 I got paid**. Type the amount, check the date and 
 
 ## Sharing a view-only link with your boss
 On the **Pay** tab tap **🔗 Share a view-only link**. It writes a short message with a link he can open on any phone, with no email, sign-in or Google needed. The page shows every job (address, each day with Full/Half/Custom and the rate, job total, received, due), the payments received, and the totals, all read-only. The link is a **snapshot** from the moment you made it: tap the button again to send a fresh one. The information travels inside the link itself (the part after the "#"), so it is never stored on GitHub or any server. Owner names, phone numbers, photos and paint details are **not** included. Anyone who has the link can read it, so only send it to people you trust.
+
+## It keeps your place
+If you switch apps, take a call, turn the screen off, or the phone reloads the page, the app reopens on the same page (same job, day, paint or area) at the same spot on the screen, with whatever you'd typed but not yet saved still in the boxes. Press Save as usual when you're done. Leaving that page (back, another tab) clears it. Pop-up boxes (like "I got paid" or the send box) are not kept, so finish or cancel those first.
