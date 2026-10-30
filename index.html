@@ -193,6 +193,12 @@
   nav button { flex:1; background:none; border-radius:14px; flex-direction:column; gap:2px; padding:7px 0; min-height:56px; color:var(--muted); font-size:11.5px; font-weight:700; }
   nav button .ic { font-size:21px; line-height:1; }
   nav button.on { color:var(--brand); background:var(--brand-soft); }
+  #map { height:62vh; min-height:340px; border-radius:18px; overflow:hidden; box-shadow:var(--shadow); z-index:0; }
+  .pin span { display:block; width:24px; height:24px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:3px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.4); margin:2px; }
+  .legend { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--muted); font-weight:600; justify-content:flex-end; } .legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; }
+  .mp { cursor:pointer; font:14px/1.35 system-ui,sans-serif; color:#1b2130; } .mp-img { height:110px; border-radius:10px; background:hsl(var(--h) 55% 80%) center/cover; display:flex; align-items:center; justify-content:center; font-size:34px; }
+  .mp-b { padding-top:8px; } .mp-b b { font-size:16px; } .mp-s { color:#667085; font-size:13px; } .mp-t { display:inline-block; color:#fff; font-size:12px; font-weight:700; padding:2px 9px; border-radius:99px; margin-top:6px; }
+  .mp-n { margin-top:6px; color:#344054; } .mp-go { margin-top:8px; font-weight:700; color:#2f6bff; }
 </style>
 </head>
 <body>
@@ -314,6 +320,7 @@ function absorb(keep, dup) {
 }
 function cleanup() {
   let changed = false; redirects = {};
+  for (const p of state.paints) if (p.sheen === "Semi-gloss") { p.sheen = "Semi-gloss / Medium luster"; touch(p); changed = true; } // on the can, "medium luster" is the same sheen as semi-gloss
   // 1. old versions kept pay on each time entry: move it up to the job
   for (const v of state.visits) {
     const hasLegacy = (v.pay !== "" && v.pay != null) || (v.paidAmount !== "" && v.paidAmount != null) || (v.paidDate !== "" && v.paidDate != null);
@@ -527,7 +534,7 @@ let dirty = {}, lastViewKey = "", persistTimer = null;
 const viewKey = () => [tab, openJob, openEntry, openPaint, openArea, jobTab].join("|");
 function persistView() {
   clearTimeout(persistTimer);
-  try { localStorage.setItem(VIEW_KEY, JSON.stringify({ t: Date.now(), tab, openJob, openEntry, openPaint, openArea, jobTab, calMonth, calSel, calView, key: viewKey(), fields: dirty, y: window.scrollY })); } catch {}
+  try { localStorage.setItem(VIEW_KEY, JSON.stringify({ t: Date.now(), tab, openJob, openEntry, openPaint, openArea, jobTab, jobsView, calMonth, calSel, calView, key: viewKey(), fields: dirty, y: window.scrollY })); } catch {}
 }
 const persistSoon = () => { clearTimeout(persistTimer); persistTimer = setTimeout(persistView, 400); };
 function noteTyping(e) { const t = e.target; if (!t || !t.id || t.type === "file" || t.type === "password" || !t.closest("#app")) return; dirty[t.id] = t.type === "checkbox" || t.type === "radio" ? { c: t.checked } : { v: t.value }; persistSoon(); }
@@ -535,7 +542,7 @@ function restoreTyping() { for (const [id, f] of Object.entries(dirty)) { const 
 function restoreView() {
   let v; try { v = JSON.parse(localStorage.getItem(VIEW_KEY)); } catch {}
   if (!v || Date.now() - v.t > 3 * 864e5) return false;
-  tab = v.tab || tab; calMonth = v.calMonth || calMonth; calSel = v.calSel || calSel; calView = v.calView || calView;
+  tab = v.tab || tab; calMonth = v.calMonth || calMonth; calSel = v.calSel || calSel; calView = v.calView || calView; jobsView = v.jobsView || "list";
   if (tab === "jobs" && v.openJob && jobById(v.openJob)) {
     openJob = v.openJob; jobTab = v.jobTab || null;
     if (v.openEntry && state.visits.some(x => x.id === v.openEntry && live(x))) openEntry = v.openEntry;
@@ -739,18 +746,73 @@ function jobCard(s) {
       <div class="jc-meta">${stat}<span class="chip ${ps}">${ps === "nopay" ? "No pay set" : statusLabel[ps] + (owedOf(s) > 0 ? " · " + money(owedOf(s)) : "")}</span></div>
       <div class="jc-stats">${st.days ? `${when}${st.days} day${st.days === 1 ? "" : "s"}` : "No days yet"}${st.maxCrew ? ` · 👷 ${st.maxCrew}` : ""}</div></div></div>`;
 }
+const JOBTYPES = [["interior", "Interior"], ["exterior", "Exterior"], ["both", "Both"]], PINCOLOR = { interior: "#2f6bff", exterior: "#f08a1c", both: "#8b4fd8", "": "#8a93a5" };
+let jobsView = "list", mapBase = "street", mapObj = null, mapSaved = null, leafletReady = null;
+const hasPlace = s => s.lat !== "" && s.lat != null && s.lng !== "" && s.lng != null && isFinite(s.lat) && isFinite(s.lng);
+function loadLeaflet() {
+  return leafletReady ||= new Promise((res, rej) => {
+    const css = (href) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; document.head.append(l); };
+    const js = (src, ok, bad) => { const e = document.createElement("script"); e.src = src; e.onload = ok; e.onerror = bad; document.head.append(e); };
+    css("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"); css("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"); css("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css");
+    js("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js", () => js("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js", res, res), () => { leafletReady = null; rej(new Error("map")); });
+  });
+}
+let geoQueue = Promise.resolve();
+async function placeJob(s) { // looks the address up once (OpenStreetMap's free service) and remembers it on the job
+  const q = s.address.replace(/#\s*\w+|\b(apt|unit|suite|ste)\.?\s*\w+/gi, "").replace(/\s+/g, " ").trim();
+  const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(q)); const j = await r.json();
+  if (!j[0]) return false; s.lat = Number(j[0].lat); s.lng = Number(j[0].lon); touch(s); save(); return true;
+}
+const queuePlace = s => geoQueue = geoQueue.then(() => placeJob(s).catch(() => false)).then(async ok => { await new Promise(r => setTimeout(r, 1100)); return ok; });
+async function drawMap(app) {
+  const box = $("#map"); if (!box) return;
+  try { await loadLeaflet(); } catch { box.innerHTML = `<div class="empty" style="padding:60px 16px"><span class="big-emoji">🗺</span>The map needs an internet connection. Try again when you have signal.</div>`; return; }
+  if (!document.body.contains(box)) return;
+  if (mapObj) { mapObj.remove(); mapObj = null; }
+  const street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }), aerial = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Imagery © Esri" });
+  const map = mapObj = L.map(box, { zoomControl: true, layers: [mapBase === "aerial" ? aerial : street] }).setView(mapSaved ? mapSaved.c : [33.9, -117.2], mapSaved ? mapSaved.z : 9);
+  map.on("moveend", () => { mapSaved = { c: map.getCenter(), z: map.getZoom() }; });
+  app.querySelectorAll("[data-mb]").forEach(b => b.onclick = () => { mapBase = b.dataset.mb; map.removeLayer(mapBase === "aerial" ? street : aerial); map.addLayer(mapBase === "aerial" ? aerial : street); app.querySelectorAll("[data-mb]").forEach(x => x.classList.toggle("on", x === b)); });
+  const group = L.markerClusterGroup ? L.markerClusterGroup({ maxClusterRadius: 45 }) : L.layerGroup(); map.addLayer(group);
+  const markers = {};
+  const addPin = s => {
+    if (markers[s.id] || !hasPlace(s)) return;
+    const c = PINCOLOR[s.jobType || ""], icon = L.divIcon({ className: "pin", html: `<span style="background:${c}"></span>`, iconSize: [28, 36], iconAnchor: [14, 34], popupAnchor: [0, -32] });
+    const m = markers[s.id] = L.marker([s.lat, s.lng], { icon, title: s.address }); group.addLayer(m);
+    const type = (JOBTYPES.find(t => t[0] === s.jobType) || [])[1];
+    m.bindPopup(`<div class="mp" data-open="${s.id}"><div class="mp-img" data-mpimg="${s.id}" style="--h:${hue(s.address)}">🏠</div><div class="mp-b"><b>${esc(streetOf(s.address))}</b><div class="mp-s">${esc(s.address.split(",").slice(1).join(",").trim())}</div>${type ? `<span class="mp-t" style="background:${c}">${type}</span>` : ""}${s.work ? `<div class="mp-n">${esc(s.work.replace(/\s+/g, " ").slice(0, 110))}</div>` : ""}<div class="mp-go">Open job ›</div></div></div>`, { minWidth: 230, maxWidth: 270 });
+    m.on("popupopen", async e => { const el = e.popup.getElement(), cp = coverPhoto(s), img = el.querySelector("[data-mpimg]"); if (cp && img) { const u = await photoUrl(cp); if (u) { img.style.backgroundImage = `url(${u})`; img.textContent = ""; } } el.querySelector(".mp").onclick = () => { jobsView = "list"; goJob(s.id); }; });
+  };
+  const all = jobs(); all.forEach(addPin);
+  if (!mapSaved) { const pts = all.filter(hasPlace).map(s => [s.lat, s.lng]); if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 }); }
+  const todo = all.filter(s => !hasPlace(s));
+  if (todo.length) { const note = $("#map-note"); if (note) note.textContent = `Placing ${todo.length} address${todo.length > 1 ? "es" : ""} on the map…`;
+    let left = todo.length, fail = [];
+    for (const s of todo) queuePlace(s).then(ok => { left--; if (ok && mapObj === map) { addPin(s); if (!mapSaved && Object.keys(markers).length) map.fitBounds(Object.values(markers).map(m => m.getLatLng()), { padding: [40, 40], maxZoom: 15 }); } else if (!ok) fail.push(s); const n = $("#map-note"); if (n) n.textContent = left ? `Placing ${left} more…` : fail.length ? `Couldn't find: ${fail.map(f => streetOf(f.address)).join(", ")}. Check the spelling in the job's Details.` : ""; }); }
+}
 function viewJobs(app) {
+  if (jobsView === "map") {
+    app.innerHTML = `<div class="row" style="margin-bottom:10px"><div class="pills grow"><button data-jv="list">☰ List</button><button data-jv="map" class="on">🗺 Map</button></div></div>
+      <div class="row" style="margin-bottom:8px"><div class="pills"><button data-mb="street" class="${mapBase === "street" ? "on" : ""}">Map</button><button data-mb="aerial" class="${mapBase === "aerial" ? "on" : ""}">Aerial</button></div>
+        <div class="legend">${JOBTYPES.map(([k, l]) => `<span><i style="background:${PINCOLOR[k]}"></i>${l}</span>`).join("")}<span><i style="background:${PINCOLOR[""]}"></i>Not set</span></div></div>
+      <div id="map"></div><div class="muted" id="map-note" style="margin:8px 4px"></div>`;
+    app.querySelectorAll("[data-jv]").forEach(b => b.onclick = () => { jobsView = b.dataset.jv; render(); });
+    drawMap(app); return;
+  }
+  if (mapObj) { mapObj.remove(); mapObj = null; }
   const all = jobs();
   const list = all.filter(s => (!q.trim() || searchMatch(s, q)) && (!dateQ || entriesOf(s).some(v => dayOf(v.start) === dateQ))
       && (jobFilter === "all" || (jobFilter === "open" && !s.done) || (jobFilter === "finished" && s.done) || (jobFilter === "unpaid" && owedOf(s) > 0)))
     .map(s => ({ s, a: stats(s).active ? 1 : 0, last: stats(s).last || "" })).sort((x, y) => y.a - x.a || y.last.localeCompare(x.last)).map(x => x.s);
   app.innerHTML = `
+    <div class="row" style="margin-bottom:10px"><div class="pills grow"><button data-jv="list" class="on">☰ List</button><button data-jv="map">🗺 Map</button></div></div>
     <input id="q" class="search" type="search" placeholder="Search name, phone, address, notes…" value="${esc(q)}" autocomplete="off">
     <div class="filters">${[["all", "All"], ["open", "Open"], ["finished", "Finished"], ["unpaid", "Unpaid"]].map(([k, l]) => `<button data-f="${k}" class="${jobFilter === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <details ${dateQ ? "open" : ""}><summary>📅 Find by day worked</summary><div class="row" style="margin-top:6px"><input id="dq" type="date" value="${esc(dateQ)}"><button class="small" id="dqx">Clear</button></div></details>
     <div class="row" style="margin:12px 4px 10px"><span class="muted">${list.length} job${list.length === 1 ? "" : "s"}${q.trim() ? ` matching “${esc(q.trim())}”` : ""}</span><button class="small primary" id="newjob">＋ New job</button></div>
     <div id="choose"></div>
     ${list.map(jobCard).join("") || `<div class="empty"><span class="big-emoji">${all.length ? "🔍" : "🎨"}</span>${all.length ? "No jobs match that." : "No jobs yet.<br>Start one on the Clock tab by typing an address."}</div>`}`;
+  app.querySelectorAll("[data-jv]").forEach(b => b.onclick = () => { jobsView = b.dataset.jv; render(); });
   $("#q").oninput = e => { q = e.target.value; const pos = e.target.selectionStart; render(); const el = $("#q"); el.focus(); el.setSelectionRange(pos, pos); };
   app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { jobFilter = b.dataset.f; render(); });
   $("#dq").onchange = e => { dateQ = e.target.value; render(); };
@@ -810,11 +872,14 @@ function tabDetails(box, s) {
     <div class="card"><h3>🛠 What was done</h3>
       <textarea id="j-work" placeholder="e.g. Prepped & primed living room, 2 coats walls, trim and doors, patched 6 holes">${esc(s.work)}</textarea>
       <div class="actions"><button class="primary" id="j-notes-save">Save</button></div></div>
+    <div class="card"><h3>🏷 Job type</h3><div class="muted">Used for the pin color on the map.</div>
+      <div class="pills" style="margin-top:10px">${JOBTYPES.map(([k, l]) => `<button data-jt="${k}" class="${s.jobType === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
     <div class="card"><h3>🏠 Job address</h3>
       <input id="d-addr" value="${esc(s.address)}" autocapitalize="words">
       <div class="actions"><button class="primary small" id="d-addr-save">Save address</button></div></div>
     <div class="actions" style="justify-content:space-between"><button class="soft small" id="j-merge">⇄ Merge with another job</button><button class="danger small" id="j-del">Delete job</button></div>
     <div id="merge-box"></div>`;
+  box.querySelectorAll("[data-jt]").forEach(b => b.onclick = () => { s.jobType = s.jobType === b.dataset.jt ? "" : b.dataset.jt; touch(s); save(); render(); });
   $("#d-addr-save").onclick = () => {
     const a = $("#d-addr").value.trim(); if (!a || a === s.address) return;
     s.address = a; touch(s); const before = jobs().length; save();
@@ -1162,7 +1227,7 @@ function parseLabel(raw) {
   }
   if (out.colorName) { out.colorName = out.colorName.split(" ").slice(0, 5).join(" "); if (out.colorName.length < 3) delete out.colorName; }
   // sheen
-  for (const [re, name] of [[/SEMI[\s-]*GLOSS/, "Semi-gloss"], [/HIGH[\s-]*GLOSS|\bGLOSS\b/, "Gloss"], [/\bSATIN\b/, "Satin"], [/EGG[\s-]*SHELL|LOW[\s-]*LUSTRE?|LOW[\s-]*LUSTER/, "Eggshell"], [/\bMATTE?\b/, "Matte"], [/ULTRA[\s-]*FLAT|\bFLAT\b/, "Flat"]]) if (re.test(upL)) { out.sheen = name; break; }
+  for (const [re, name] of [[/SEMI[\s-]*GLOSS|MEDIUM[\s-]*LUSTRE?/, "Semi-gloss / Medium luster"], [/HIGH[\s-]*GLOSS|\bGLOSS\b/, "Gloss"], [/\bSATIN\b/, "Satin"], [/EGG[\s-]*SHELL|LOW[\s-]*LUSTRE?|LOW[\s-]*LUSTER/, "Eggshell"], [/\bMATTE?\b/, "Matte"], [/ULTRA[\s-]*FLAT|\bFLAT\b/, "Flat"]]) if (re.test(upL)) { out.sheen = name; break; }
   // product line, interior/exterior, base
   for (const [name, re] of PRODUCT_RES) if (re.test(upL)) { out.product = name; break; }
   if (!out.product && out.brand === "Behr" && /\bULTRA\b/.test(up) && !/ULTRA[\s-]*FLAT/.test(up)) out.product = "Ultra";
@@ -1269,7 +1334,7 @@ const SURFACES = ["Stucco", "Siding", "Trim", "Fascia / eaves", "Soffits", "Fron
 const ROOMS = ["Master bedroom", "Bedroom", "Living room", "Kitchen", "Bathroom", "Laundry room", "Hallway", "Entry", "Dining room", "Office"];
 const BRANDS = ["Sherwin-Williams", "Behr", "Benjamin Moore", "Dunn-Edwards", "Kelly-Moore", "Valspar", "PPG", "Glidden", "Vista", "Frazee", "Kilz", "Zinsser"];
 const PRODUCTS = ["Duration", "SuperPaint", "ProClassic", "Emerald", "Ultra", "Marquee", "Regal Select", "Aura", "Cashmere", "Primer", "Ceiling paint"];
-const SHEENS = ["Flat", "Matte", "Eggshell", "Satin", "Semi-gloss", "Gloss"];
+const SHEENS = ["Flat", "Matte", "Eggshell", "Satin", "Semi-gloss / Medium luster", "Gloss"];
 const paintCard = p => `<div class="card tap" data-paint="${p.id}"><div class="row top" style="gap:12px">
   <div class="thumb sm" data-pphoto="${p.photoFront || p.photoTop || ""}" style="--h:${hue(p.brand || "paint")}"><span>🎨</span></div>
   <div class="grow"><div class="street">${esc(paintName(p))}</div><div>${paintColor(p) ? esc(paintColor(p)) : `<span class="muted">No color yet</span>`}</div>
@@ -1557,7 +1622,7 @@ const jsonPost = (url, body) => gfetch(url, { method: "POST", headers: { "Conten
 // "lastPay" (Sites) and pay/paidAmount/paidDate (Visits) are only read, to migrate older data.
 const SHEET_NAME = "Painter Job Tracker";
 const COLS = {
-  Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "lat", "lng", "name", "lastPay", "updated", "deleted"],
+  Sites: ["id", "address", "ownerFirst", "ownerLast", "ownerPhone", "ownerInfo", "payMode", "pay", "paidAmount", "paidDate", "paint", "work", "done", "cover", "jobType", "lat", "lng", "name", "lastPay", "updated", "deleted"],
   Visits: ["id", "siteId", "address", "start", "end", "hours", "dayType", "rate", "crew", "crewNames", "notes", "pay", "paidAmount", "paidDate", "updated", "deleted"],
   Photos: ["id", "siteId", "taken", "driveId", "visitId", "kind", "label", "caption", "area", "hash", "updated", "deleted"],
   Areas: ["id", "siteId", "address", "name", "updated", "deleted"],
